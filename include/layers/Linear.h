@@ -5,7 +5,7 @@
 #include <vector>
 
 
-namespace layers{
+namespace layers {
 
     class Linear : public Module{
     private:

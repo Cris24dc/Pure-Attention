@@ -42,7 +42,7 @@ namespace core {
         return B;
     }
 
-    std::shared_ptr<Tensor> ReLU(const std::shared_ptr<Tensor>& In) {
+    std::shared_ptr<Tensor> relu(const std::shared_ptr<Tensor>& In) {
         int N = In->get_shape()[0];
 
         auto Out = std::make_shared<Tensor>(std::vector<int>{N});
