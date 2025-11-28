@@ -28,10 +28,8 @@ int main() {
 
     // Create input tensor and fill with hardcoded values
     auto input = std::make_shared<Tensor>(std::vector<uint32_t>{B, IN});
-    // Presupun că ai o metodă să copiezi datele pe device
-    // input->copy_from_host(input_data);
-    // SAU dacă ai acces direct:
-    // memcpy sau funcție similară
+    
+    input->to_device(input_data);
 
     // Create layers (cu seed pentru reproducibilitate)
     Linear l1(IN, H);
