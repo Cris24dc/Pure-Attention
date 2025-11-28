@@ -68,6 +68,6 @@ namespace core {
         int M = A->get_shape()[0];
         int N = A->get_shape()[1];
 
-        launch_zero_population(A->get_data_ptr(), M, N, CudaContext::getStream());
+        launch_normal_population(A->get_data_ptr(), M, N, CudaContext::getStream());
     }
 };
