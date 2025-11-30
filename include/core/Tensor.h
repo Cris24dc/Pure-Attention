@@ -8,6 +8,8 @@
 namespace core {
     using float32_t = float;
 
+    struct Function;
+
     struct CudaDeallocator {
         void operator()(void *ptr) const {
             if (ptr) {
@@ -23,16 +25,33 @@ namespace core {
 
         std::vector<uint32_t> shape;
         size_t size;
-        bool has_gradient; 
+
+        bool requires_gradient;
+        bool is_leaf;
+
+        std::shared_ptr<Function> grad_function;
 
     public:
-        Tensor(const std::vector<uint32_t>& shape, bool has_gardient = false);
+        explicit Tensor(const std::vector<uint32_t>& shape, bool requires_gardient = false, bool is_leaf = true);
         ~Tensor() = default;
 
-        void to_device(const std::vector<float32_t> &host_data);
-        std::vector<float32_t> to_host();
+        void to_device(const std::vector<float32_t> &host_data) const;
+        std::vector<float32_t> to_host() const;
 
         std::vector<uint32_t> get_shape() const;
-        float *get_data_ptr() const;
+        float32_t *get_data_ptr() const;
+
+        bool requires_grad() const { return requires_gradient; }
+        float32_t *get_gradient_ptr() const;
+        void set_grad_fn(std::shared_ptr<Function> fn);
+
+        void backward();
+
+        friend struct Function;
+    };
+
+    struct Function {
+        virtual void apply_backward() = 0;
+        virtual ~Function() = default;
     };
 };

@@ -10,7 +10,7 @@
 
 namespace layers {
     class Linear : public Module {
-    public:
+    private:
         std::shared_ptr<core::Tensor> weight;
         std::shared_ptr<core::Tensor> bias;
 

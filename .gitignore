@@ -1,4 +1,9 @@
 build/
 _model/
 .vscode
+.idea
 tests/test-env
+.gitmodules
+main.cpp
+main_target.cpp
+extern/

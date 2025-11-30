@@ -1,23 +1,37 @@
 cmake_minimum_required(VERSION 3.18)
-project(NeuralNetCUDA LANGUAGES CXX CUDA)
+project(DeepLearningEngine LANGUAGES CXX CUDA)
 
-set(CMAKE_CXX_STANDARD 17)
-set(CMAKE_CUDA_STANDARD 17)
+set(CMAKE_CXX_STANDARD 20)
+set(CMAKE_CUDA_STANDARD 20)
+set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 
-# Găsim pachetele CUDA necesare
 find_package(CUDAToolkit REQUIRED)
+find_package(Python COMPONENTS Interpreter Development REQUIRED)
 
-# Setăm arhitectura GPU (poți ajusta în funcție de placa ta, ex: 75, 86)
-set(CMAKE_CUDA_ARCHITECTURES native)
+set(PYBIND11_FINDPYTHON ON)
+add_subdirectory(extern/pybind11)
 
-# Include directories
-include_directories(include)
+file(GLOB_RECURSE SOURCES
+        "source/*.cpp"
+        "source/*.cu"
+)
 
-# Colectăm sursele
-file(GLOB_RECURSE SOURCES "source/*.cpp" "source/*.cu")
+list(APPEND SOURCES "bindings.cpp")
 
-# Executabilul
-add_executable(neural_net ${SOURCES} ${CMAKE_SOURCE_DIR}/main.cpp)
+pybind11_add_module(PureAttention ${SOURCES})
 
-# Linkare cu biblioteci CUDA (runtime și math library dacă e cazul)
-target_link_libraries(neural_net PRIVATE CUDA::cudart)
+target_include_directories(PureAttention PRIVATE include)
+
+target_link_libraries(PureAttention PRIVATE CUDA::cudart)
+
+
+set_target_properties(PureAttention PROPERTIES
+        LIBRARY_OUTPUT_DIRECTORY "${CMAKE_SOURCE_DIR}"
+        ARCHIVE_OUTPUT_DIRECTORY "${CMAKE_SOURCE_DIR}"
+        RUNTIME_OUTPUT_DIRECTORY "${CMAKE_SOURCE_DIR}"
+        PREFIX ""
+)
+
+if(CMAKE_CUDA_COMPILER_ID STREQUAL "NVIDIA")
+    set_property(TARGET PureAttention PROPERTY CUDA_ARCHITECTURES native)
+endif()
