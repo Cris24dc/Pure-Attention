@@ -12,7 +12,9 @@ using float32_t = float;
 __global__ void matmul_kernel_tiled(const float32_t *A, const float32_t *B, float32_t *C, int32_t M, int32_t N, int32_t K);
 __global__ void matadd_kernel_tiled(const float32_t *A, const float32_t *X, float32_t *B, const int32_t M, const int32_t N);
 __global__ void ReLU_kernel_tiled(const float *In, float *Out, const u_int32_t M, const uint32_t N);
+
 __global__ void populate_normal(float32_t *A, uint32_t M, uint32_t N, const uint64_t seed);
+
 __global__ void matmul_backward_X_kernel(
     const float32_t* __restrict__ grad_Y_out,
     const float32_t* __restrict__ W_in,
@@ -23,12 +25,17 @@ __global__ void matmul_backward_W_kernel(
     const float32_t *grad_Y_out,
     float32_t *grad_W_in,
     const u_int32_t M, const u_int32_t N, const uint32_t K);
+
 __global__ void tensor_add_grad_kernel(const float32_t* src, float32_t* dst, int32_t size) ;
 __global__ void sum_rows_grad_kernel(const float32_t* src, float32_t* dst, int32_t M, int32_t N) ;
 __global__ void relu_backward_kernel(const float32_t* grad_out, const float32_t* input_data, float32_t* grad_in, int32_t size) ;
+
+__global__ void mse_forward_kernel(const float32_t *preds, const float32_t *targets, float32_t *loss_out, const uint32_t N) ;
+__global__ void mse_div_kernel(float32_t *loss_out,const uint32_t N) ;
 __global__ void mse_backward_kernel(
     const float* predictions,
     const float* targets,
     const float* grad_loss_scalar,
     float* grad_predictions,
     int N) ;
+

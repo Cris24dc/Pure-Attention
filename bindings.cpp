@@ -5,6 +5,7 @@
 #include <layers/Module.h>
 #include <layers/Linear.h>
 #include <layers/ReLU.h>
+#include <layers/MSELoss.h>
 #include <core/Functional.h>
 
 namespace py = pybind11;
@@ -59,4 +60,9 @@ PYBIND11_MODULE(PureAttention, m) {
         .def(py::init<>())
         .def("forward", &ReLU::forward)
         .def("parameters", &ReLU::parameters);
+
+    py::class_<MSELoss, Module, std::shared_ptr<MSELoss>>(m, "MSELoss")
+        .def(py::init<>())
+        .def("forward", py::overload_cast<const std::shared_ptr<Tensor>&, const std::shared_ptr<Tensor>&>(&MSELoss::forward))
+        .def("__call__", py::overload_cast<const std::shared_ptr<Tensor>&, const std::shared_ptr<Tensor>&>(&MSELoss::forward));
 }

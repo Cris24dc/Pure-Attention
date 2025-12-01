@@ -2,6 +2,8 @@
 #include <backend/Kernels.cuh>
 #include <c++/13/cstdint>
 
+#include "core/Tensor.h"
+
 __global__ void matmul_kernel_tiled(const float *A, const float *B, float *C, int M, int N, int K) {
     __shared__ float s_A[TILE_WIDTH][TILE_WIDTH];
     __shared__ float s_B[TILE_WIDTH][TILE_WIDTH];
@@ -216,19 +218,42 @@ __global__ void relu_backward_kernel(const float* grad_out, const float* input_d
 }
 
 
-__global__ void mse_backward_kernel(
-    const float* predictions,
-    const float* targets,
-    const float* grad_loss_scalar,
-    float* grad_predictions,
-    int N)
-{
-    int idx = blockIdx.x * blockDim.x + threadIdx.x;
+__global__ void mse_forward_kernel(const float32_t *preds, const float32_t *targets, float32_t *loss_out, const uint32_t N) {
+    const uint32_t idx = blockIdx.x * blockDim.x + threadIdx.x;
+
+    if (idx == 0) {
+        *loss_out = 0.0f;
+    }
+    __syncthreads();
 
     if (idx < N) {
-        float diff = predictions[idx] - targets[idx];
-        float factor = 2.0f / static_cast<float>(N);
-        float local_grad = factor * diff * grad_loss_scalar[0];
+        const float32_t diff = preds[idx] - targets[idx];
+        const core::float32_t sq_diff = diff * diff;
+
+        atomicAdd(loss_out, sq_diff);
+    }
+}
+
+__global__ void mse_div_kernel(float32_t *loss_out,const uint32_t N) {
+    if (threadIdx.x == 0 && blockIdx.x == 0) {
+        *loss_out /= static_cast<float32_t>(N);
+    }
+}
+
+
+__global__ void mse_backward_kernel(
+    const float32_t *predictions,
+    const float32_t *targets,
+    const float32_t *grad_loss_scalar,
+    float32_t *grad_predictions,
+    const uint32_t N)
+{
+    const uint32_t idx = blockIdx.x * blockDim.x + threadIdx.x;
+
+    if (idx < N) {
+        const float32_t diff = predictions[idx] - targets[idx];
+        const float32_t factor = 2.0f / static_cast<float>(N);
+        const float32_t local_grad = factor * diff * grad_loss_scalar[0];
         grad_predictions[idx] += local_grad;
     }
 }

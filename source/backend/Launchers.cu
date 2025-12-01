@@ -119,10 +119,33 @@ void launch_mse_backward(
     int N,
     cudaStream_t stream)
 {
-    int threads = 256;
-    int blocks = (N + threads - 1) / threads;
+    size_t total = static_cast<size_t>(N);
+
+    int device;
+    cudaGetDevice(&device);
+    cudaDeviceProp device_props{};
+    cudaGetDeviceProperties(&device_props, device);
+
+    int threads = std::min(256, device_props.maxThreadsPerBlock);
+    size_t blocks = (total + threads - 1) / threads;
 
     mse_backward_kernel<<<blocks, threads, 0, stream>>>(
         preds, targets, grad_loss, grad_preds, N
     );
+}
+
+void launch_mse_forward(const float* preds, const float* targets, float* loss_out, int N, cudaStream_t stream) {
+    size_t total = static_cast<size_t>(N);
+
+    int device;
+    cudaGetDevice(&device);
+    cudaDeviceProp device_props{};
+    cudaGetDeviceProperties(&device_props, device);
+
+    int threads = std::min(256, device_props.maxThreadsPerBlock);
+    size_t blocks = (total + threads - 1) / threads;
+
+    mse_forward_kernel<<<blocks, threads, 0, stream>>>(preds, targets, loss_out, N);
+
+    mse_div_kernel<<<1, 1, 0, stream>>>(loss_out, N);
 }

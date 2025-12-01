@@ -7,3 +7,4 @@ tests/test-env
 main.cpp
 main_target.cpp
 extern/
+.env/

@@ -13,4 +13,5 @@ namespace core {
     void pop_grad_ones(const std::shared_ptr<Tensor> &A);
     void pop_grad_ones(Tensor *A);
     void pop_data_normal(const std::shared_ptr<Tensor> &A);
+    std::shared_ptr<Tensor> mse_loss(const std::shared_ptr<Tensor>& preds, const std::shared_ptr<Tensor>& targets);
 };

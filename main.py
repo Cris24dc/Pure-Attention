@@ -43,10 +43,14 @@ def main():
 
     model = Network()
 
+    # 1. Instantiere
+    criterion = pa.MSELoss()
+
     for i in range(10):
         pred = model.forward(input_tensor)
 
-        loss = pa.mse_loss(pred, target_tensor)
+        # 2. Apelare Concreta (Explicit .forward)
+        loss = criterion.forward(pred, target_tensor)
 
         print(f"Epoch {i+1}, Loss: {loss.to_host()[0]:.6f}")
 

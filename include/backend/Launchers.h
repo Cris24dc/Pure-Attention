@@ -23,3 +23,4 @@ void launch_tensor_add_grad(const float* src, float* dst, int size, cudaStream_t
 void launch_sum_rows_grad(const float* src, float* dst, int M, int N, cudaStream_t stream);
 void launch_relu_backward(const float* grad_out, const float* input_data, float* grad_in, int size, cudaStream_t stream);
 void launch_mse_backward(const float* preds, const float* targets, const float* grad_loss, float* grad_preds, int N, cudaStream_t stream);
+void launch_mse_forward(const float* preds, const float* targets, float* loss_out, int N, cudaStream_t stream) ;

@@ -78,6 +78,33 @@ namespace core {
     }
 
 
+    MSEFunction::MSEFunction(const std::shared_ptr<Tensor>& preds,
+                    const std::shared_ptr<Tensor>& targs,
+                    const std::shared_ptr<Tensor>& out)
+            : predictions(preds), targets(targs), output_loss(out) {}
+
+    void MSEFunction::apply_backward()  {
+        auto loss_ptr = output_loss.lock();
+        if (!loss_ptr) return;
+
+        uint32_t N = 1;
+        for(auto s : predictions->get_shape()) N *= s;
+
+        if (predictions->requires_grad()) {
+            launch_mse_backward(
+                predictions->get_data_ptr(),
+                targets->get_data_ptr(),
+                loss_ptr->get_gradient_ptr(),
+                predictions->get_gradient_ptr(),
+                N,
+                CudaContext::getStream()
+            );
+
+            predictions->backward();
+        }
+    }
+
+
 };
 
 
