@@ -33,9 +33,9 @@ __global__ void relu_backward_kernel(const float32_t* grad_out, const float32_t*
 __global__ void mse_forward_kernel(const float32_t *preds, const float32_t *targets, float32_t *loss_out, const uint32_t N) ;
 __global__ void mse_div_kernel(float32_t *loss_out,const uint32_t N) ;
 __global__ void mse_backward_kernel(
-    const float* predictions,
-    const float* targets,
-    const float* grad_loss_scalar,
-    float* grad_predictions,
-    int N) ;
+    const float32_t *predictions,
+    const float32_t *targets,
+    const float32_t *grad_loss_scalar,
+    float32_t *grad_predictions,
+    const uint32_t N) ;
 
