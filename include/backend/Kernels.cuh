@@ -38,4 +38,16 @@ __global__ void mse_backward_kernel(
     const float32_t *grad_loss_scalar,
     float32_t *grad_predictions,
     const uint32_t N) ;
-
+__global__ void adam_step_kernel(
+    float32_t* params,
+    const float32_t* grads,
+    float32_t* m,
+    float32_t* v,
+    const uint32_t size,
+    const float32_t beta1,
+    const float32_t beta2,
+    const float32_t epsilon,
+    const float32_t alpha, // learning rate
+    const float32_t beta1_corr, // 1 - beta1^t
+    const float32_t beta2_corr  // 1 - beta2^t
+);

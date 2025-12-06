@@ -149,3 +149,28 @@ void launch_mse_forward(const float* preds, const float* targets, float* loss_ou
 
     mse_div_kernel<<<1, 1, 0, stream>>>(loss_out, N);
 }
+
+void launch_adam_step(
+    float32_t* params,
+    const float32_t* grads,
+    float32_t* m,
+    float32_t* v,
+    int size,
+    float32_t beta1,
+    float32_t beta2,
+    float32_t epsilon,
+    float32_t lr,
+    int step,
+    cudaStream_t stream
+) {
+    int threads = 256;
+    int blocks = (size + threads - 1) / threads;
+
+    // Calculăm corecțiile pe CPU ca să nu facem powf pe GPU în fiecare thread
+    float32_t beta1_corr = 1.0f - std::pow(beta1, static_cast<float32_t>(step));
+    float32_t beta2_corr = 1.0f - std::pow(beta2, static_cast<float32_t>(step));
+
+    adam_step_kernel<<<blocks, threads, 0, stream>>>(
+        params, grads, m, v, size, beta1, beta2, epsilon, lr, beta1_corr, beta2_corr
+    );
+}

@@ -42,19 +42,26 @@ def main():
     target_tensor.to_device(target_data)
 
     model = Network()
-
-    # 1. Instantiere
+    
+    # 1. Instanțiere Optimizer
+    # Preluăm parametrii din model
+    optimizer = pa.Adam(model.parameters(), lr=0.01) 
     criterion = pa.MSELoss()
 
-    for i in range(10):
-        pred = model.forward(input_tensor)
+    for i in range(100): # Mărește nr de epoci să vezi convergența
+        # Reset gradients inainte de backward (sau dupa step)
+        optimizer.zero_grad()
 
-        # 2. Apelare Concreta (Explicit .forward)
+        pred = model.forward(input_tensor)
         loss = criterion.forward(pred, target_tensor)
 
         print(f"Epoch {i+1}, Loss: {loss.to_host()[0]:.6f}")
 
+        # Calculează gradientii
         loss.backward()
+        
+        # Actualizează greutățile
+        optimizer.step()
 
 if __name__ == "__main__":
     main()

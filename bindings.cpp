@@ -7,6 +7,7 @@
 #include <layers/ReLU.h>
 #include <layers/MSELoss.h>
 #include <core/Functional.h>
+#include <core/Adam.h>
 
 namespace py = pybind11;
 using namespace core;
@@ -65,4 +66,10 @@ PYBIND11_MODULE(PureAttention, m) {
         .def(py::init<>())
         .def("forward", py::overload_cast<const std::shared_ptr<Tensor>&, const std::shared_ptr<Tensor>&>(&MSELoss::forward))
         .def("__call__", py::overload_cast<const std::shared_ptr<Tensor>&, const std::shared_ptr<Tensor>&>(&MSELoss::forward));
+
+    py::class_<optim::Adam, std::shared_ptr<optim::Adam>>(m, "Adam")
+        .def(py::init<std::vector<std::shared_ptr<Tensor>>, float, float, float, float>(), 
+             py::arg("params"), py::arg("lr")=0.001f, py::arg("beta1")=0.9f, py::arg("beta2")=0.999f, py::arg("eps")=1e-8f)
+        .def("step", &optim::Adam::step)
+        .def("zero_grad", &optim::Adam::zero_grad);
 }

@@ -24,3 +24,16 @@ void launch_sum_rows_grad(const float* src, float* dst, int M, int N, cudaStream
 void launch_relu_backward(const float* grad_out, const float* input_data, float* grad_in, int size, cudaStream_t stream);
 void launch_mse_backward(const float* preds, const float* targets, const float* grad_loss, float* grad_preds, int N, cudaStream_t stream);
 void launch_mse_forward(const float* preds, const float* targets, float* loss_out, int N, cudaStream_t stream) ;
+void launch_adam_step(
+    float32_t* params,
+    const float32_t* grads,
+    float32_t* m,
+    float32_t* v,
+    int size,
+    float32_t beta1,
+    float32_t beta2,
+    float32_t epsilon,
+    float32_t lr,
+    int step,
+    cudaStream_t stream
+);
