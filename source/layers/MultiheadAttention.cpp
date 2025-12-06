@@ -20,7 +20,7 @@ namespace layers {
         return query;
     }
 
-    std::vector<std::shared_ptr<core::Tensor>> parameters() {
+    std::vector<std::shared_ptr<core::Tensor>> MultiheadAttention::parameters() {
         std::vector<std::shared_ptr<core::Tensor>> result;
 
         return result;
