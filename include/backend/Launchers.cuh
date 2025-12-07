@@ -3,7 +3,10 @@
 // libs
 #include <cuda_runtime.h>
 #include <algorithm>
+#include <memory>
 #include <chrono>
+
+#include <core/Tensor.h>
 
 // macro
 #define TILE_WIDTH 32
@@ -109,8 +112,8 @@ void launch_mse_backward(
     cudaStream_t stream
 );
 
-void launch_mse_forward(c
-    onst float* preds, 
+void launch_mse_forward(
+    const float* preds,
     const float* targets, 
     float* loss_out, 
     int N, 
@@ -128,5 +131,30 @@ void launch_adam_step(
     float32_t epsilon, 
     float32_t lr, 
     int step, 
+    cudaStream_t stream
+);
+
+void launch_flash_attention(
+    const std::shared_ptr<core::Tensor>& Q,
+    const std::shared_ptr<core::Tensor>& K,
+    const std::shared_ptr<core::Tensor>& V,
+    std::shared_ptr<core::Tensor>& O,
+    cudaStream_t stream
+);
+
+void launch_flash_backward_optimized(
+    float* Q,
+    float* K,
+    float* V,
+    float* O,
+    float* dO,
+    float* L_vec,
+    float* dQ,
+    float* dK,
+    float* dV,
+    int N,
+    int H,
+    int L,
+    int E,
     cudaStream_t stream
 );

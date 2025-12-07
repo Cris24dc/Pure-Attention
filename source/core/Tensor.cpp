@@ -42,7 +42,9 @@ namespace core {
                 const std::string error_msg = "CUDA Error: " + std::string(cudaGetErrorString(err));
                 throw std::runtime_error(error_msg);
             }
-            pop_grad_zeros(this);
+            const cudaStream_t& stream = CudaContext::getStream();
+
+            pop_grad_zeros(this,stream);
     
             gradient_ptr.reset(raw_ptr_grad);
         }

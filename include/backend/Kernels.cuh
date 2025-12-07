@@ -110,3 +110,46 @@ __global__ void adam_step_kernel(
     const float32_t beta1_step,
     const float32_t beta2_step
 );
+
+
+template <int Br, int Bc, int D>
+__global__ void flash_attention_kernel(
+    const float* __restrict__ Q,
+    const float* __restrict__ K,
+    const float* __restrict__ V,
+    float* __restrict__ O,
+    const int N,
+    const int H,
+    const int L,
+    const float softmax_scale,
+    const int stride_batch,
+    const int stride_head,
+    const int stride_seq
+);
+
+
+__global__ void compute_delta_kernel(
+    const float* __restrict__ dO,
+    const float* __restrict__ O,
+    float* __restrict__ Delta,
+    const int N, const int H, const int L, const int D
+);
+
+template <int Br, int Bc, int D>
+__global__ void __launch_bounds__(128) flash_attn_backward_kernel(
+    const float* __restrict__ Q,
+    const float* __restrict__ K,
+    const float* __restrict__ V,
+    const float* __restrict__ O,
+    const float* __restrict__ dO,
+    const float* __restrict__ L_vec,
+    const float* __restrict__ Delta,
+    float* __restrict__ dQ,
+    float* __restrict__ dK,
+    float* __restrict__ dV,
+    const int stride_batch,
+    const int stride_head,
+    const int stride_seq,
+    const int L,
+    const float sm_scale
+);

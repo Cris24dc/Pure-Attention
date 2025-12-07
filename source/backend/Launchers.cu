@@ -1,6 +1,6 @@
 // headers
 #include <backend/Kernels.cuh>
-#include <backend/Launchers.h>
+#include <backend/Launchers.cuh>
 
 using float32_t = float;
 

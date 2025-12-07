@@ -58,6 +58,77 @@ Să presupunem formula: $\hat{y} = W_2 \cdot \text{ReLU}(W_1 \cdot x + b_1) + b_
       (y_pred) 🟦  (FINAL OUTPUT)
 ```
 
+```text
+[ FLUXUL DE DATE (Main Stream) ]                     [ PARAMETRII (Weights & Biases) ]
+
+              (x) Input
+              🟦 🟦 🟦  (Clonat in 3 ramuri)
+             /   |   \
+            /    |    \
+           /     |     \  ----------------------------------------.
+          v      v      v                                         |
+   (Ramura Q) (Ramura K) (Ramura V)                               |
+       |         |          |                                     |
+       v         v          v                                     v
+ 🟢 [MatMul]  🟢 [MatMul] 🟢 [MatMul] <------------------- (W_q, W_k, W_v) 🟦
+       |         |          |
+       v         v          v                                     v
+ 🟢 [Add]     🟢 [Add]    🟢 [Add]    <------------------- (b_q, b_k, b_v) 🟦
+       |         |          |
+    (Q_proj)  (K_proj)   (V_proj)
+       🟦        🟦         🟦
+       |         |          |
+       v         v          v
+ 🟢 [Split & Transpose] (x3 Nodes)
+       |         |          |
+     (Q_h)     (K_h)      (V_h)
+       🟦        🟦         🟦
+       |         |          |
+       |         |          |
+       +----+----+          |
+            |               |
+            v               |
+     🟢 [Batched MatMul]    |
+       (Q_h * K_h^T)        |
+            |               |
+            v               |
+      (Raw Scores) 🟦       |
+            |               |
+            v               |
+     🟢 [Scale & Softmax]   |
+            |               |
+            v               |
+      (Attn Probs) 🟦       |
+            |               |
+            +-------+-------+
+                    |
+                    v
+            🟢 [Batched MatMul]
+           (Attn_Probs * V_h)
+                    |
+                    v
+            (Context Heads) 🟦
+                    |
+                    v
+            🟢 [Transpose & Merge]
+                    |
+                    v
+             (Context Merged)
+                    🟦                                          (W_out)
+                    |                                             🟦
+                    v                                             |
+            🟢 [MatMul Final] <-----------------------------------+
+                    |
+                    v
+                 (tmp) 🟦                                       (b_out)
+                    |                                             🟦
+                    v                                             |
+             🟢 [Add Final] <-------------------------------------+
+                    |
+                    v
+                 (Output) 🟦
+```
+
 -----
 
 ### Cum funcționează magia (Pointerii)

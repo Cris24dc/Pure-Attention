@@ -1,6 +1,6 @@
 // headers
 #include <core/Adam.h>
-#include <backend/Launchers.h>
+#include <backend/Launchers.cuh>
 #include <core/Context.h>
 #include <core/Functional.h>
 
@@ -18,9 +18,10 @@ namespace optim {
             auto m = std::make_shared<core::Tensor>(p->get_shape(), false, false);
             auto v = std::make_shared<core::Tensor>(p->get_shape(), false, false);
 
-            // Populate cu zero
-            core::pop_data_zeros(m);
-            core::pop_data_zeros(v);
+            const cudaStream_t& stream = CudaContext::getStream();
+
+            core::pop_data_zeros(m,stream);
+            core::pop_data_zeros(v,stream);
 
             m_states.push_back(m);
             v_states.push_back(v);
@@ -61,7 +62,8 @@ namespace optim {
     void Adam::zero_grad() {
         for (auto& param : parameters) {
             if (param->requires_grad()) {
-                core::pop_grad_zeros(param);
+                const cudaStream_t& stream = CudaContext::getStream();
+                core::pop_grad_zeros(param,stream);
             }
         }
     }

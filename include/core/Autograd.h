@@ -43,4 +43,22 @@ namespace core {
 
         void apply_backward() override;
     };
+
+    struct FlashAttentionFunction : public Function {
+        std::shared_ptr<Tensor> Q_input;
+        std::shared_ptr<Tensor> K_input;
+        std::shared_ptr<Tensor> V_input;
+        std::shared_ptr<Tensor> L_vec; // LogSumExp statistics din Forward
+        std::weak_ptr<Tensor> Output;  // Weak ptr pentru a evita ciclurile
+
+        FlashAttentionFunction(
+            std::shared_ptr<Tensor> q,
+            std::shared_ptr<Tensor> k,
+            std::shared_ptr<Tensor> v,
+            std::shared_ptr<Tensor> out,
+            std::shared_ptr<Tensor> l_vec
+        );
+
+        void apply_backward() override;
+    };
 };
