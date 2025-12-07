@@ -1,10 +1,7 @@
 // headers
-#include <backend/Launchers.h>
 #include <backend/Kernels.cuh>
-#include <algorithm>
+#include <backend/Launchers.h>
 
-#include <curand_kernel.h>
- 
 using float32_t = float;
 
 void launch_matmul_tiled(float32_t *A, float32_t *B, float32_t *C, int M, int N, int K, cudaStream_t stream) {

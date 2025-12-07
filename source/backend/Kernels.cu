@@ -1,8 +1,6 @@
 // headers
 #include <backend/Kernels.cuh>
-#include <c++/13/cstdint>
-
-#include "core/Tensor.h"
+#include <core/Tensor.h>
 
 __global__ void matmul_kernel_tiled(const float *A, const float *B, float *C, int M, int N, int K) {
     __shared__ float s_A[TILE_WIDTH][TILE_WIDTH];
@@ -268,8 +266,8 @@ __global__ void adam_step_kernel(
     const float32_t beta2,
     const float32_t epsilon,
     const float32_t alpha,
-    const float32_t beta1_corr,
-    const float32_t beta2_corr
+    const float32_t beta1_step,
+    const float32_t beta2_step
 ) {
     const uint32_t idx = blockIdx.x * blockDim.x + threadIdx.x;
 
@@ -283,8 +281,8 @@ __global__ void adam_step_kernel(
         v[idx] = beta2 * v[idx] + (1.0f - beta2) * g * g;
 
         // Bias correction
-        const float32_t m_hat = m[idx] / beta1_corr;
-        const float32_t v_hat = v[idx] / beta2_corr;
+        const float32_t m_hat = m[idx] / beta1_step;
+        const float32_t v_hat = v[idx] / beta2_step;
 
         // Update parameter
         params[idx] -= alpha * (m_hat / (sqrtf(v_hat) + epsilon));
