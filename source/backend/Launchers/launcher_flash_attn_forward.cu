@@ -15,20 +15,38 @@ void launch_flash_attention(
     const int H = 8;
     const int D = E / H;
 
-    // Constants for Tiling
-    const int Br = 16;
-    const int Bc = 32;
+    // N = batch_size
+    // L = sequence len
+    // E = embeddings dim (model size)
+    // H = number of heads
+    // D = head dimension
 
-    float scale = 1.0f / sqrtf((float)D);
+    constexpr int B_r = 16;
+    constexpr int B_c = 32;
 
-    int stride_batch = L * E;
-    int stride_head = D;
-    int stride_seq = E;
+    const float scale = 1.0f / sqrtf(static_cast<float>(D));
 
-    dim3 block(D / 4, Br);
-    dim3 grid(N * H, (L + Br - 1) / Br);
+    const int stride_batch = L * E;
+    const int stride_head = D;
+    const int stride_seq = E;
 
-    size_t smem_size = (Br * D + Bc * D + Bc * D) * sizeof(float);
+
+    // as the original paper mentions in pseudocode that Q, K and V matrices has Nxd dimension
+    // take in consideration that it reefers to only one head, so our notation is LxD
+    // which is logic when we think that we want to put attention probabilities on heads of our phrase
+    // in addition the paper mentions that we divide Q into L/B_r blocks we consider block size B_r x D / 4
+    // due to sram low capacity and vectorized memory access respectively
+
+    dim3 block(D / 4, B_r);
+    dim3 grid(N * H, (L + B_r - 1) / B_r);
+
+    // we also collapse N and H dimensions in only one because all (batch, head) paris are independent
+    // the scope of the grid s second dimension is to cover the whole dimension of the L fractured in
+
+    // total = (grid.x) * (grid.y * block.y) * (block.x * 4)
+    // total =  (N * H) *     ( ceil(L) )    *  (D / 4 * 4)
+
+    size_t smem_size = (B_r * D + B_c * D + B_c * D) * sizeof(float);
 
     if (D == 64) {
         flash_attention_kernel<16, 32, 64><<<grid, block, smem_size, stream>>>(
