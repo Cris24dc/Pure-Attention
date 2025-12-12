@@ -3,15 +3,16 @@
 #include <cuda_runtime.h>
 #include <device_launch_parameters.h>
 #include <math_constants.h>
-#include <algorithm>
+
+#include "core/Tensor.h"
 
 #define MAX_HEAD_DIM 64
 
-__device__ __forceinline__ float4 load_float4(const float* ptr, int idx) {
+__device__ __forceinline__ float4 load_float4(const float* ptr, const uint32_t idx) {
     return reinterpret_cast<const float4*>(ptr)[idx];
 }
 
-__device__ __forceinline__ void store_float4(float* ptr, int idx, float4 val) {
+__device__ __forceinline__ void store_float4(float* ptr, const uint32_t idx, const float4 val) {
     reinterpret_cast<float4*>(ptr)[idx] = val;
 }
 
@@ -32,46 +33,43 @@ __global__ void flash_attention_kernel(
 ) {
     extern __shared__ float sram[];
 
-    const int tx = threadIdx.x;
-    const int ty = threadIdx.y;
-    const int bx = blockIdx.x;
-    const int by = blockIdx.y;
+    const uint32_t tx = threadIdx.x;
+    const uint32_t ty = threadIdx.y;
+    const uint32_t bx = blockIdx.x;
+    const uint32_t by = blockIdx.y;
 
-    // 3: for 1 <= i <= Tr do
-    const int q_block_idx = by;
-    const int kv_block_count = (L + B_c - 1) / B_c;
+    const uint32_t q_block_idx = by;
+    const uint32_t kv_block_count = (L + B_c - 1) / B_c;
 
-    const int batch_idx = bx / H;
-    const int head_idx = bx % H;
+    const uint32_t batch_idx = bx / H;
+    const uint32_t head_idx = bx % H;
 
-    const int q_offset_base = batch_idx * stride_batch + head_idx * stride_head;
-    const int k_offset_base = batch_idx * stride_batch + head_idx * stride_head;
-    const int v_offset_base = batch_idx * stride_batch + head_idx * stride_head;
-    const int o_offset_base = batch_idx * stride_batch + head_idx * stride_head;
+    const uint32_t q_offset_base = batch_idx * stride_batch + head_idx * stride_head;
+    const uint32_t k_offset_base = batch_idx * stride_batch + head_idx * stride_head;
+    const uint32_t v_offset_base = batch_idx * stride_batch + head_idx * stride_head;
+    const uint32_t o_offset_base = batch_idx * stride_batch + head_idx * stride_head;
 
     float* sramQ = sram;
     float* sramK = sram + B_r * D;
     float* sramV = sram + B_r * D + B_c * D;
 
-    // 5: On chip, initialize O_i = (0), l_i = (0), m_i = (-inf).
     float acc[D] = {0.0f};
     float l = 0.0f;
     float m = -CUDART_INF_F;
 
     int q_global_offset = q_offset_base + (q_block_idx * B_r * stride_seq);
 
-    // 4: Load Q_i from HBM to on-chip SRAM.
     #pragma unroll
-    for (int i = ty; i < B_r; i += blockDim.y) {
+    for (uint32_t i = ty; i < B_r; i += blockDim.y) {
         if (q_block_idx * B_r + i < L) {
             #pragma unroll
-            for (int j = tx; j < D / 4; j += blockDim.x) {
+            for (uint32_t j = tx; j < D / 4; j += blockDim.x) {
                 float4 loaded = load_float4(Q + q_global_offset + i * stride_seq, j);
                 reinterpret_cast<float4*>(&sramQ[i * D])[j] = loaded;
             }
         } else {
              #pragma unroll
-             for (int j = tx; j < D / 4; j += blockDim.x) {
+             for (uint32_t j = tx; j < D / 4; j += blockDim.x) {
                 reinterpret_cast<float4*>(&sramQ[i * D])[j] = make_float4(0.0f, 0.0f, 0.0f, 0.0f);
              }
         }
@@ -79,26 +77,24 @@ __global__ void flash_attention_kernel(
 
     __syncthreads();
 
-    // 6: for 1 <= j <= Tc do
-    for (int j = 0; j < kv_block_count; ++j) {
-        int k_global_offset = k_offset_base + (j * B_c * stride_seq);
-        int v_global_offset = v_offset_base + (j * B_c * stride_seq);
+    for (int j = 0; j < kv_block_count; j+=1) {
+        const int k_global_offset = k_offset_base + (j * B_c * stride_seq);
+        const int v_global_offset = v_offset_base + (j * B_c * stride_seq);
 
-        // 7: Load K_j, V_j from HBM to on-chip SRAM.
         #pragma unroll
-        for (int i = ty; i < B_c; i += blockDim.y) {
+        for (uint32_t i = ty; i < B_c; i += blockDim.y) {
             if (j * B_c + i < L) {
                 #pragma unroll
-                for (int x = tx; x < D / 4; x += blockDim.x) {
-                    float4 val_k = load_float4(K + k_global_offset + i * stride_seq, x);
+                for (uint32_t x = tx; x < D / 4; x += blockDim.x) {
+                    const float4 val_k = load_float4(K + k_global_offset + i * stride_seq, x);
                     reinterpret_cast<float4*>(&sramK[i * D])[x] = val_k;
 
-                    float4 val_v = load_float4(V + v_global_offset + i * stride_seq, x);
+                    const float4 val_v = load_float4(V + v_global_offset + i * stride_seq, x);
                     reinterpret_cast<float4*>(&sramV[i * D])[x] = val_v;
                 }
             } else {
                 #pragma unroll
-                for (int x = tx; x < D / 4; x += blockDim.x) {
+                for (uint32_t x = tx; x < D / 4; x += blockDim.x) {
                     reinterpret_cast<float4*>(&sramK[i * D])[x] = make_float4(0.0f, 0.0f, 0.0f, 0.0f);
                     reinterpret_cast<float4*>(&sramV[i * D])[x] = make_float4(0.0f, 0.0f, 0.0f, 0.0f);
                 }
@@ -106,22 +102,23 @@ __global__ void flash_attention_kernel(
         }
         __syncthreads();
 
-        int row = ty;
+        uint32_t row = ty;
         if (row < B_r && (q_block_idx * B_r + row) < L) {
-            float row_m_prev = m;
-            float row_l_prev = l;
+            const float32_t row_max_prev = m;
+            const float32_t row_l_prev = l;
 
-            float row_m_curr = -CUDART_INF_F;
-            float row_l_curr = 0.0f;
+            float32_t row_max_curr = -CUDART_INF_F;
 
-            float scores[B_c];
+            float32_t scores[B_c];
 
             // 8: On chip, compute S_ij = Q_i * K_j^T
+            // in other words here we compute q * k.T raw attention score, scale it with sqrt(d_head)
+            // mask padding zone with -inf, and track block max in row_max_curr
             #pragma unroll
-            for (int k = 0; k < B_c; ++k) {
-                float score = 0.0f;
+            for (int k = 0; k < B_c; k+=1) {
+                float32_t score = 0.0f;
                 #pragma unroll
-                for (int x = 0; x < D; ++x) {
+                for (int x = 0; x < D; x+=1) {
                     score += sramQ[row * D + x] * sramK[k * D + x];
                 }
                 score *= softmax_scale;
@@ -129,69 +126,71 @@ __global__ void flash_attention_kernel(
                 if (j * B_c + k >= L) score = -CUDART_INF_F;
 
                 scores[k] = score;
-                // 9: On chip, compute m_ij = max(m_i, rowmax(S_ij))
-                row_m_curr = fmaxf(row_m_curr, score);
+                row_max_curr = fmaxf(row_max_curr, score);
             }
 
-            float new_m = fmaxf(row_m_prev, row_m_curr);
-
-            float exp_diff_prev = __expf(row_m_prev - new_m);
-            float exp_diff_curr = __expf(row_m_curr - new_m);
-
-            float row_sum_exp = 0.0f;
+            // 9: On chip, compute m_ij = max(m_i, rowmax(S_ij))
+            float32_t new_max = fmaxf(row_max_prev, row_max_curr);
+            float32_t exp_diff_prev = __expf(row_max_prev - new_max);
+            float32_t row_sum_exp = 0.0f;
 
             // 9: On chip, compute P_ij = exp(S_ij - m_ij) (pointwise)
+            // atp scores[] stores unnormalized probabilities because we do not need raw scores anymore
+            // we cumulate in row_sum_expt all this unnormalized probabilities because we need it as
+            // softmax s numerator
             #pragma unroll
-            for (int k = 0; k < B_c; ++k) {
-                float p = __expf(scores[k] - new_m);
+            for (int k = 0; k < B_c; k+=1) {
+                float32_t p = __expf(scores[k] - new_max);
                 scores[k] = p;
                 row_sum_exp += p;
             }
 
             // 9: On chip, compute l_ij = e^(m_prev - m_new) * l_prev + rowsum(P_ij)
-            float new_l = (row_l_prev * exp_diff_prev) + row_sum_exp;
+            // update denominator using scaling bactor based on max value after considering the block in scope
+            const float32_t new_l = (row_l_prev * exp_diff_prev) + row_sum_exp;
 
             // 10: On chip, compute O_i = diag(e^(m_prev - m_new)) * O_i + P_ij * V_j
             #pragma unroll
-            for (int x = 0; x < D; ++x) {
-                float pv_sum = 0.0f;
+            for (int x = 0; x < D; x+=1) {
+                float32_t pv_sum = 0.0f;
                 #pragma unroll
-                for (int k = 0; k < B_c; ++k) {
+                for (int k = 0; k < B_c; k+=1) {
                      pv_sum += scores[k] * sramV[k * D + x];
                 }
                 acc[x] = (acc[x] * exp_diff_prev) + pv_sum;
             }
 
             l = new_l;
-            m = new_m;
+            m = new_max;
         }
         __syncthreads();
-    } // 11: end for
+    }
 
-    if (const int row = ty; row < B_r && (q_block_idx * B_r + row) < L) {
+
+    if (const uint32_t row = ty; row < B_r && (q_block_idx * B_r + row) < L) {
         // 12: On chip, compute O_i = diag(l_i)^-1 * O_i
-        float inv_l = 1.0f / (l + 1e-6f);
+        float32_t inv_l = 1.0f / (l + 1e-6f);
         const int out_idx = o_offset_base + (q_block_idx * B_r + row) * stride_seq;
 
         // 14: Write O_i to HBM as the i-th block of O.
         #pragma unroll
-        for (int x = 0; x < D; ++x) {
+        for (int x = 0; x < D; x+=1) {
             O[out_idx + x] = acc[x] * inv_l;
         }
 
         // 13: On chip, compute L_i = m_i + log(l_i).
         // 15: Write L_i to HBM as the i-th block of L.
-        int l_idx = (batch_idx * H + head_idx) * L + (q_block_idx * B_r + row);
+        const int l_idx = (batch_idx * H + head_idx) * L + (q_block_idx * B_r + row);
         L_cache[l_idx] = m + __logf(l);
     }
 }
 
 template __global__ void flash_attention_kernel<16, 32, 32>(
-    const float*, const float*, const float*, float*,
+    const float*, const float*, const float*, float*, float*,
     int, int, int, float, int, int, int
 );
 
 template __global__ void flash_attention_kernel<16, 32, 64>(
-    const float*, const float*, const float*, float*,
+    const float*, const float*, const float*, float*, float*,
     int, int, int, float, int, int, int
 );

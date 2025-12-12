@@ -51,18 +51,17 @@ void launch_flash_attention(
     size_t smem_size = (B_r * D + B_c * D + B_c * D) * sizeof(float);
 
     // 2: Divide the output O ... into Tr blocks... and divide the logsumexp L into Tr blocks Li...
-    // (Aici presupunem ca O si L_cache sunt deja alocate corect inainte de apel)
 
     if (D == 64) {
         flash_attention_kernel<16, 32, 64><<<grid, block, smem_size, stream>>>(
             Q->get_data_ptr(), K->get_data_ptr(), V->get_data_ptr(), O->get_data_ptr(),
-            L_cache->get_data_ptr(), // UPDATED: Pasam pointerul pentru L
+            L_cache->get_data_ptr(),
             N, H, L, scale, stride_batch, stride_head, stride_seq
         );
     } else if (D == 32) {
          flash_attention_kernel<16, 32, 32><<<grid, block, smem_size, stream>>>(
             Q->get_data_ptr(), K->get_data_ptr(), V->get_data_ptr(), O->get_data_ptr(),
-            L_cache->get_data_ptr(), // UPDATED: Pasam pointerul pentru L
+            L_cache->get_data_ptr(),
             N, H, L, scale, stride_batch, stride_head, stride_seq
         );
     }

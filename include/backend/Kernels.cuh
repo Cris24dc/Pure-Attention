@@ -113,12 +113,13 @@ __global__ void adam_step_kernel(
 );
 
 
-template <int Br, int Bc, int D>
+template <int B_r, int B_c, int D>
 __global__ void flash_attention_kernel(
-    const float* Q,
-    const float* K,
-    const float* V,
-    float* O,
+    const float* __restrict__ Q,
+    const float* __restrict__ K,
+    const float* __restrict__ V,
+    float* __restrict__ O,
+    float* __restrict__ L_cache,
     const int N,
     const int H,
     const int L,
@@ -127,7 +128,6 @@ __global__ void flash_attention_kernel(
     const int stride_head,
     const int stride_seq
 );
-
 
 __global__ void compute_delta_kernel(
     const float* dO,
