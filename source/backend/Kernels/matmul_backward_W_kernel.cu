@@ -50,6 +50,6 @@ __global__ void matmul_backward_W_kernel(
     }
 
     if (global_row_gr_W < N && global_col_gr_W < K) {
-        grad_W_in[global_row_gr_W * K + global_col_gr_W] = sum;
+        grad_W_in[global_row_gr_W * K + global_col_gr_W] += sum;
     }
 }

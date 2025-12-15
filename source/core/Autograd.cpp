@@ -18,19 +18,18 @@ namespace core {
         if (X_input->requires_grad()) {
             launch_matmul_grad_X(grad_out_ptr,W_input->get_data_ptr(), X_input->get_gradient_ptr(),M, N, K,
                 CudaContext::getStream());
-            X_input->backward();
+            X_input->backward(false);
         }
 
         if (W_input->requires_grad()) {
             launch_matmul_grad_W(X_input->get_data_ptr(),grad_out_ptr,W_input->get_gradient_ptr(), M, N, K,
                 CudaContext::getStream());
-            W_input->backward();
+            W_input->backward(false);
         }
     }
 
-
     AddFunction::AddFunction(std::shared_ptr<Tensor> x, std::shared_ptr<Tensor> bias, std::shared_ptr<Tensor> y)
-            : X_input(x), bias_input(bias), Y_output(y) {}
+        : X_input(x), bias_input(bias), Y_output(y) {}
 
     void AddFunction::apply_backward() {
         auto out_ptr = Y_output.lock();
@@ -43,7 +42,7 @@ namespace core {
 
         if (X_input->requires_grad()) {
             launch_tensor_add_grad(grad_out_ptr,X_input->get_gradient_ptr(),size, CudaContext::getStream());
-            X_input->backward();
+            X_input->backward(false);
         }
 
         if (bias_input->requires_grad()) {
@@ -54,13 +53,12 @@ namespace core {
             else
                 launch_tensor_add_grad(grad_out_ptr,bias_input->get_gradient_ptr(),size,CudaContext::getStream());
 
-            bias_input->backward();
+            bias_input->backward(false);
         }
     }
 
-
     ReLUFunction::ReLUFunction(std::shared_ptr<Tensor> in, std::shared_ptr<Tensor> out)
-    : Input(in), Output(out) {}
+        : Input(in), Output(out) {}
 
     void ReLUFunction::apply_backward()  {
         auto out_ptr = Output.lock();
@@ -73,15 +71,15 @@ namespace core {
         if (Input->requires_grad()) {
             launch_relu_backward(out_ptr->get_gradient_ptr(), Input->get_data_ptr(), Input->get_gradient_ptr(),
                 size, CudaContext::getStream());
-            Input->backward();
+            Input->backward(false);
         }
     }
 
-
-    MSEFunction::MSEFunction(const std::shared_ptr<Tensor>& preds,
-                    const std::shared_ptr<Tensor>& targs,
-                    const std::shared_ptr<Tensor>& out)
-            : predictions(preds), targets(targs), output_loss(out) {}
+    MSEFunction::MSEFunction(
+        const std::shared_ptr<Tensor>& preds,
+        const std::shared_ptr<Tensor>& targs,
+        const std::shared_ptr<Tensor>& out)
+        : predictions(preds), targets(targs), output_loss(out) {}
 
     void MSEFunction::apply_backward()  {
         auto loss_ptr = output_loss.lock();
@@ -100,12 +98,8 @@ namespace core {
                 CudaContext::getStream()
             );
 
-            predictions->backward();
+            predictions->backward(false);
         }
     }
 
 }
-
-
-
-

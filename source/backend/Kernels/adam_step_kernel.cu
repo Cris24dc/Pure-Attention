@@ -12,24 +12,20 @@ __global__ void adam_step_kernel(
     const float32_t epsilon,
     const float32_t alpha,
     const float32_t beta1_corr,
-    const float32_t beta2_corr
-) {
+    const float32_t beta2_corr) 
+{
     const uint32_t idx = blockIdx.x * blockDim.x + threadIdx.x;
 
     if (idx < size) {
         const float32_t g = grads[idx];
         
-        // Update moment m
         m[idx] = beta1 * m[idx] + (1.0f - beta1) * g;
         
-        // Update moment v
         v[idx] = beta2 * v[idx] + (1.0f - beta2) * g * g;
 
-        // Bias correction
         const float32_t m_hat = m[idx] / beta1_corr;
         const float32_t v_hat = v[idx] / beta2_corr;
 
-        // Update parameter
         params[idx] -= alpha * (m_hat / (sqrtf(v_hat) + epsilon));
     }
 }

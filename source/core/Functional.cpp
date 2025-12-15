@@ -88,7 +88,6 @@ namespace core {
         if (N == 0)
             N = 1;
 
-
         launch_zero_population(A->get_data_ptr(), M, N, stream);
     }
 
@@ -98,7 +97,6 @@ namespace core {
 
         if (N == 0)
             N = 1;
-
 
         launch_zero_population(A->get_gradient_ptr(), M, N, stream);
     }
@@ -122,7 +120,6 @@ namespace core {
         if (N == 0)
             N = 1;
 
-
         launch_ones_population(A->get_gradient_ptr(), M, N, stream);
     }
 
@@ -144,7 +141,6 @@ namespace core {
 
         if (N == 0)
             N = 1;
-
 
         launch_normal_population(A->get_data_ptr(), M, N, std_dev, stream);
     }

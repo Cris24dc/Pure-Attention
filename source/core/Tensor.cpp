@@ -100,23 +100,24 @@ namespace core {
         is_leaf=false;
     }
 
-    void Tensor::backward() const {
+    void Tensor::backward(bool seed_with_ones) const {
         if (!requires_gradient) {
             throw std::runtime_error("Called backward() on a tensor that does not require gradients.");
         }
 
-        size_t total_elements = 1;
-        for (auto s : shape) total_elements *= s;
-
-        std::vector<float> host_ones(total_elements, 1.0f);
-
-        cudaMemcpyAsync(
-            gradient_ptr.get(),
-            host_ones.data(),
-            total_elements * sizeof(float),
-            cudaMemcpyHostToDevice,
-            CudaContext::getStream()
-        );
+        if (seed_with_ones) {
+            size_t total_elements = 1;
+            for (auto s : shape) total_elements *= s;
+    
+            std::vector<float> host_ones(total_elements, 1.0f);
+            cudaMemcpyAsync(
+                gradient_ptr.get(),
+                host_ones.data(),
+                total_elements * sizeof(float),
+                cudaMemcpyHostToDevice,
+                CudaContext::getStream()
+            );
+        }
 
         if (grad_function)
             grad_function->apply_backward();
