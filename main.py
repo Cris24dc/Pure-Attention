@@ -9,9 +9,9 @@ class HousingModel(pa.Module):
     def __init__(self, input_dim):
         super().__init__()
         # Arhitectura: Input(8) -> Linear(32) -> ReLU -> Linear(1)
-        self.l1 = pa.Linear(input_dim, 32)
+        self.l1 = pa.Linear(input_dim, 128)
         self.relu = pa.ReLU()
-        self.l2 = pa.Linear(32, 1)
+        self.l2 = pa.Linear(128, 1)
 
     def forward(self, x):
         x = self.l1.forward(x)
@@ -45,7 +45,7 @@ def main():
     X_train_scaled = scaler.fit_transform(X_train)
     # Luăm un batch mai mic pentru antrenare (ex: 1000 exemple) ca să vedem viteza
     # Sau poți antrena pe tot setul dacă implementarea ta suportă memorie suficientă.
-    BATCH_SIZE = 1000
+    BATCH_SIZE = 2000
     X_batch = X_train_scaled[:BATCH_SIZE]
     y_batch = y_train[:BATCH_SIZE]
     
@@ -69,13 +69,13 @@ def main():
     model = HousingModel(input_dim=IN)
     
     # Learning rate poate necesita ajustare. 0.001 sau 0.01 sunt standard.
-    optimizer = pa.Adam(model.parameters(), lr=0.0001) 
+    optimizer = pa.Adam(model.parameters(), lr=0.00001) 
     criterion = pa.MSE()
 
     print(f"Start training on {B} samples...")
 
     # 4. Training Loop
-    epochs = 500
+    epochs = 1000
     for i in range(epochs):
         optimizer.zero_grad()
 
