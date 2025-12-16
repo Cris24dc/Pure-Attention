@@ -1,7 +1,7 @@
 #include <backend/Launchers.cuh>
 #include <backend/Kernels.cuh>
 
-void launch_flash_backward_optimized(
+void launch_flash_backward(
     float* Q, float* K, float* V, float* O, float* dO, float* L_vec,
     float* dQ, float* dK, float* dV,
     int N, int H, int L, int E,
@@ -12,30 +12,31 @@ void launch_flash_backward_optimized(
 
     float* d_Delta;
     cudaMallocAsync(&d_Delta, N * H * L * sizeof(float), stream);
+    int threads = 256;
+    int blocks = (N * H * L + threads - 1) / threads;
+    compute_delta_kernel<<<blocks, threads, 0, stream>>>(dO, O, d_Delta, N, H, L, D);
 
-    int total_threads = N * H * L;
-    int blocks_delta = (total_threads + 255) / 256;
-    compute_delta_kernel<<<blocks_delta, 256, 0, stream>>>(dO, O, d_Delta, N, H, L, D);
+    cudaMemsetAsync(dQ, 0, N * H * L * D * sizeof(float), stream);
 
-    cudaMemsetAsync(dQ, 0, N * L * E * sizeof(float), stream);
-    cudaMemsetAsync(dK, 0, N * L * E * sizeof(float), stream);
-    cudaMemsetAsync(dV, 0, N * L * E * sizeof(float), stream);
-
+    const int Bc = 64;
     const int Br = 16;
-    const int Bc = 32;
+    const int PAD = 8;
 
-    dim3 grid((L + Br - 1) / Br, 1, N * H);
-    dim3 block(32);
-    size_t smem_size = (2 * Br * D + 2 * Bc * D) * sizeof(float);
+    dim3 grid((L + Bc - 1) / Bc, N * H);
+    dim3 block(256);
+
+
+    size_t smem_size = (4 * Bc * (D + PAD) + 2 * Br * (D + PAD)) * sizeof(float);
 
     if (D == 64) {
-        flash_attn_backward_kernel<16, 32, 64><<<grid, block, smem_size, stream>>>(
+        flash_attn_backward_kernel<64, 16, 64><<<grid, block, smem_size, stream>>>(
             Q, K, V, O, dO, L_vec, d_Delta, dQ, dK, dV, H, 1, E, L, sm_scale
         );
-    } else if (D == 32) {
-         flash_attn_backward_kernel<16, 32, 32><<<grid, block, smem_size, stream>>>(
-            Q, K, V, O, dO, L_vec, d_Delta, dQ, dK, dV, H, 1, E, L, sm_scale
-        );
+    }
+    else if (D == 32) {
+        flash_attn_backward_kernel<64, 16, 32><<<grid, block, smem_size, stream>>>(
+           Q, K, V, O, dO, L_vec, d_Delta, dQ, dK, dV, H, 1, E, L, sm_scale
+       );
     }
 
     cudaFreeAsync(d_Delta, stream);

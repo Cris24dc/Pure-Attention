@@ -1,6 +1,7 @@
 #include <backend/Kernels.cuh>
 
 
+#define WARP_SIZE 32
 #define MAX_THREADS 256
 
 __device__ __forceinline__ float4 load_float4(const float* ptr, int idx) {
@@ -11,6 +12,15 @@ __device__ __forceinline__ void store_float4(float* ptr, int idx, float4 val) {
     reinterpret_cast<float4*>(ptr)[idx] = val;
 }
 
+__device__ __forceinline__ float warp_reduce_sum(float val) {
+    #pragma unroll
+    for (int offset = WARP_SIZE / 2; offset > 0; offset /= 2) {
+        val += __shfl_down_sync(0xffffffff, val, offset);
+    }
+    return val;
+}
+
+
 __global__ void compute_delta_kernel(
     const float* __restrict__ dO,
     const float* __restrict__ O,
@@ -19,9 +29,6 @@ __global__ void compute_delta_kernel(
 ) {
     int idx = blockIdx.x * blockDim.x + threadIdx.x;
     if (idx >= N * H * L) return;
-
-    int batch_head_idx = idx / L;
-    int seq_idx = idx % L;
 
     float sum = 0.0f;
     int offset = idx * D;
@@ -32,8 +39,8 @@ __global__ void compute_delta_kernel(
     Delta[idx] = sum;
 }
 
-template <int Br, int Bc, int D>
-__global__ void __launch_bounds__(128) flash_attn_backward_kernel(
+template <int Bc, int Br, int D>
+__global__ void __launch_bounds__(256) flash_attn_backward_kernel(
     const float* __restrict__ Q,
     const float* __restrict__ K,
     const float* __restrict__ V,
@@ -50,79 +57,100 @@ __global__ void __launch_bounds__(128) flash_attn_backward_kernel(
     const int L,
     const float sm_scale
 ) {
+    constexpr int PAD = 8;
+    constexpr int PADDED_D = D + PAD;
+
     extern __shared__ float sram[];
-    float* sQ = sram;
-    float* sdO = sram + Br * D;
-    float* sK = sram + 2 * Br * D;
-    float* sV = sram + 2 * Br * D + Bc * D;
+
+    float* sK  = sram;
+    float* sV  = sram + Bc * PADDED_D;
+    float* sdK = sram + 2 * Bc * PADDED_D;
+    float* sdV = sram + 3 * Bc * PADDED_D;
+
+    float* sQ  = sram + 4 * Bc * PADDED_D;
+    float* sdO = sram + 4 * Bc * PADDED_D + Br * PADDED_D;
 
     int tx = threadIdx.x;
     int bx = blockIdx.x;
     int by = blockIdx.y;
-    int bz = blockIdx.z;
 
-    int q_start = bx * Br;
+    int k_start_idx = bx * Bc;
+    int offset_base = by * L * D;
+    int vector_base = by * L;
 
-    int batch_idx = bz / stride_batch;
-    int head_idx = bz % stride_batch;
+    for (int i = tx; i < Bc * PADDED_D; i += blockDim.x) {
+        if (i < Bc * PADDED_D) { sdK[i] = 0.0f; }
+        if (i < Bc * PADDED_D) { sdV[i] = 0.0f; }
+    }
+    __syncthreads();
 
-    int offset_base = bz * L * D;
-    int delta_base = bz * L;
-
-    float dQ_acc[D] = {0.0f};
-
-    if (q_start < L) {
-        #pragma unroll
-        for (int i = 0; i < Br; ++i) {
-            if (q_start + i < L) {
+    if (k_start_idx < L) {
+#pragma unroll
+        for (int i = 0; i < Bc; ++i) {
+            if (k_start_idx + i < L) {
                 #pragma unroll
-                for (int x = tx; x < D / 4; x += blockDim.x) {
-                    int idx = (q_start + i) * D + x * 4;
-                    float4 val_q = load_float4(Q + offset_base, idx / 4);
-                    float4 val_do = load_float4(dO + offset_base, idx / 4);
-                    reinterpret_cast<float4*>(&sQ[i * D])[x] = val_q;
-                    reinterpret_cast<float4*>(&sdO[i * D])[x] = val_do;
+                for (int x = tx * 4; x < D; x += blockDim.x * 4) {
+                    int global_idx = (k_start_idx + i) * D + x;
+                    float4 val_k = load_float4(K + offset_base, global_idx / 4);
+                    float4 val_v = load_float4(V + offset_base, global_idx / 4);
+
+                    int sram_idx = i * PADDED_D + x;
+                    sK[sram_idx + 0] = val_k.x;
+                    sK[sram_idx + 1] = val_k.y;
+                    sK[sram_idx + 2] = val_k.z;
+                    sK[sram_idx + 3] = val_k.w;
+
+                    sV[sram_idx + 0] = val_v.x;
+                    sV[sram_idx + 1] = val_v.y;
+                    sV[sram_idx + 2] = val_v.z;
+                    sV[sram_idx + 3] = val_v.w;
                 }
             }
         }
     }
     __syncthreads();
+    int num_q_blocks = (L + Br - 1) / Br;
 
-    int num_kv_blocks = (L + Bc - 1) / Bc;
-
-    for (int j = 0; j < num_kv_blocks; ++j) {
-        int k_start = j * Bc;
+    for (int i = 0; i < num_q_blocks; ++i) {
+        int q_start_idx = i * Br;
 
         #pragma unroll
-        for (int i = 0; i < Bc; ++i) {
-            if (k_start + i < L) {
+        for (int row = 0; row < Br; ++row) {
+            if (q_start_idx + row < L) {
                 #pragma unroll
-                for (int x = tx; x < D / 4; x += blockDim.x) {
-                    int idx = (k_start + i) * D + x * 4;
-                    float4 val_k = load_float4(K + offset_base, idx / 4);
-                    float4 val_v = load_float4(V + offset_base, idx / 4);
-                    reinterpret_cast<float4*>(&sK[i * D])[x] = val_k;
-                    reinterpret_cast<float4*>(&sV[i * D])[x] = val_v;
+                for (int x = tx * 4; x < D; x += blockDim.x * 4) {
+                    int global_idx = (q_start_idx + row) * D + x;
+                    float4 val_q = load_float4(Q + offset_base, global_idx / 4);
+                    float4 val_do = load_float4(dO + offset_base, global_idx / 4);
+
+                    int sram_idx = row * PADDED_D + x;
+                    sQ[sram_idx + 0] = val_q.x;
+                    sQ[sram_idx + 1] = val_q.y;
+                    sQ[sram_idx + 2] = val_q.z;
+                    sQ[sram_idx + 3] = val_q.w;
+
+                    sdO[sram_idx + 0] = val_do.x;
+                    sdO[sram_idx + 1] = val_do.y;
+                    sdO[sram_idx + 2] = val_do.z;
+                    sdO[sram_idx + 3] = val_do.w;
                 }
             }
         }
         __syncthreads();
 
-        for (int i = 0; i < Br; ++i) {
-            int row = q_start + i;
-            if (row >= L) break;
+        for (int q_row = 0; q_row < Br; ++q_row) {
+            int global_q = q_start_idx + q_row;
+            if (global_q >= L) continue;
 
-            float l_val = L_vec[delta_base + row];
-            float delta_val = Delta[delta_base + row];
+            float l_val = L_vec[vector_base + global_q];
+            float delta_val = Delta[vector_base + global_q];
 
-            for (int k = 0; k < Bc; ++k) {
-                int col = k_start + k;
-                if (col >= L) break;
+            for (int k_idx = tx; k_idx < Bc; k_idx += blockDim.x) {
 
                 float score = 0.0f;
                 #pragma unroll
                 for (int x = 0; x < D; ++x) {
-                    score += sQ[i * D + x] * sK[k * D + x];
+                    score += sQ[q_row * PADDED_D + x] * sK[k_idx * PADDED_D + x];
                 }
 
                 float p = __expf(score * sm_scale - l_val);
@@ -130,33 +158,55 @@ __global__ void __launch_bounds__(128) flash_attn_backward_kernel(
                 float dP_val = 0.0f;
                 #pragma unroll
                 for (int x = 0; x < D; ++x) {
-                    dP_val += sdO[i * D + x] * sV[k * D + x];
+                    dP_val += sdO[q_row * PADDED_D + x] * sV[k_idx * PADDED_D + x];
                 }
 
                 float dS = p * (dP_val - delta_val) * sm_scale;
 
                 #pragma unroll
                 for (int x = 0; x < D; ++x) {
-                    dQ_acc[x] += dS * sK[k * D + x];
+                    float my_val = dS * sK[k_idx * PADDED_D + x];
+                    float warp_sum = warp_reduce_sum(my_val);
 
-                    float dK_val = dS * sQ[i * D + x];
-                    atomicAdd(&dK[offset_base + col * D + x], dK_val);
+                    if ((threadIdx.x % WARP_SIZE) == 0) {
+                        atomicAdd(&dQ[offset_base + global_q * D + x], warp_sum);
+                    }
+                }
 
-                    float dV_val = p * sdO[i * D + x];
-                    atomicAdd(&dV[offset_base + col * D + x], dV_val);
+                #pragma unroll
+                for (int x = 0; x < D; ++x) {
+                    sdK[k_idx * PADDED_D + x] += dS * sQ[q_row * PADDED_D + x];
+                    sdV[k_idx * PADDED_D + x] += p  * sdO[q_row * PADDED_D + x];
                 }
             }
         }
         __syncthreads();
     }
 
-    if (q_start < L) {
-        for (int i = 0; i < Br; ++i) {
-            if (q_start + i < L) {
-                 #pragma unroll
-                 for (int x = tx; x < D; x += blockDim.x) {
-                     dQ[offset_base + (q_start + i) * D + x] = dQ_acc[x];
-                 }
+    if (k_start_idx < L) {
+        #pragma unroll
+        for (int i = 0; i < Bc; ++i) {
+            if (k_start_idx + i < L) {
+                #pragma unroll
+                for (int x = tx * 4; x < D; x += blockDim.x * 4) {
+                    int global_idx = (k_start_idx + i) * D + x;
+                    int sram_idx = i * PADDED_D + x;
+
+                    float4 val_dk;
+                    val_dk.x = sdK[sram_idx + 0];
+                    val_dk.y = sdK[sram_idx + 1];
+                    val_dk.z = sdK[sram_idx + 2];
+                    val_dk.w = sdK[sram_idx + 3];
+
+                    float4 val_dv;
+                    val_dv.x = sdV[sram_idx + 0];
+                    val_dv.y = sdV[sram_idx + 1];
+                    val_dv.z = sdV[sram_idx + 2];
+                    val_dv.w = sdV[sram_idx + 3];
+
+                    store_float4(dK + offset_base, global_idx / 4, val_dk);
+                    store_float4(dV + offset_base, global_idx / 4, val_dv);
+                }
             }
         }
     }
@@ -165,21 +215,21 @@ __global__ void __launch_bounds__(128) flash_attn_backward_kernel(
 
 
 template __global__ void flash_attn_backward_kernel<16, 32, 64>(
-    const float* __restrict__, // Q
-    const float* __restrict__, // K
-    const float* __restrict__, // V
-    const float* __restrict__, // O
-    const float* __restrict__, // dO
-    const float* __restrict__, // L_vec
-    const float* __restrict__, // Delta
-    float* __restrict__,       // dQ
-    float* __restrict__,       // dK
-    float* __restrict__,       // dV
-    int,                       // stride_batch
-    int,                       // stride_head
-    int,                       // stride_seq
-    int,                       // L
-    float                      // sm_scale
+    const float* __restrict__,
+    const float* __restrict__,
+    const float* __restrict__,
+    const float* __restrict__,
+    const float* __restrict__,
+    const float* __restrict__,
+    const float* __restrict__,
+    float* __restrict__,
+    float* __restrict__,
+    float* __restrict__,
+    int,
+    int,
+    int,
+    int,
+    float
 );
 
 template __global__ void flash_attn_backward_kernel<16, 32, 32>(

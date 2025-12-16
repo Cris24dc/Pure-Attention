@@ -146,7 +146,7 @@ __global__ void flash_attention_kernel(
             }
 
             // 9: On chip, compute l_ij = e^(m_prev - m_new) * l_prev + rowsum(P_ij)
-            // update denominator using scaling bactor based on max value after considering the block in scope
+            // update denominator using scaling factor based on max value after considering the block in scope
             const float32_t new_l = (row_l_prev * exp_diff_prev) + row_sum_exp;
 
             // 10: On chip, compute O_i = diag(e^(m_prev - m_new)) * O_i + P_ij * V_j
