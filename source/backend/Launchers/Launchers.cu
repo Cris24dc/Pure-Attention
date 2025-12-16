@@ -69,7 +69,6 @@ void launch_ReLU_tiled(float32_t *In, float32_t *Out, int M, int N, cudaStream_t
     ReLU_kernel_tiled<<<grid, block, 0, stream>>>(In, Out, M, N);
 }
 
-
 void launch_matmul_grad_X(const float32_t* grad_Y_out, const float32_t* W_in, float32_t* grad_X_in,
                           const int M, const int N, const int K, cudaStream_t stream) {
 
@@ -91,12 +90,14 @@ void launch_matmul_grad_W(const float32_t *X_in, const float32_t *grad_Y_out, fl
 void launch_tensor_add_grad(const float32_t* src, float32_t* dst, int size, cudaStream_t stream) {
     int threads = 256;
     int blocks = (size + threads - 1) / threads;
+
     tensor_add_grad_kernel<<<blocks, threads, 0, stream>>>(src, dst, size);
 }
 
 void launch_sum_rows_grad(const float32_t* src, float32_t* dst, int M, int N, cudaStream_t stream) {
     int threads = 256;
     int blocks = (N + threads - 1) / threads;
+
     sum_rows_grad_kernel<<<blocks, threads, 0, stream>>>(src, dst, M, N);
 }
 
@@ -104,6 +105,7 @@ void launch_relu_backward(const float32_t* grad_out, const float32_t* input_data
     cudaStream_t stream) {
     int threads = 256;
     int blocks = (size + threads - 1) / threads;
+
     relu_backward_kernel<<<blocks, threads, 0, stream>>>(grad_out, input_data, grad_in, size);
 }
 
@@ -143,7 +145,6 @@ void launch_mse_forward(const float* preds, const float* targets, float* loss_ou
     size_t blocks = (total + threads - 1) / threads;
 
     mse_forward_kernel<<<blocks, threads, 0, stream>>>(preds, targets, loss_out, N);
-
     mse_div_kernel<<<1, 1, 0, stream>>>(loss_out, N);
 }
 
@@ -159,12 +160,10 @@ void launch_adam_step(
     float32_t lr,
     const float32_t beta1_corr,
     const float32_t beta2_corr,
-    cudaStream_t stream
-) {
+    cudaStream_t stream)
+{
     int threads = 256;
     int blocks = (size + threads - 1) / threads;
 
-    adam_step_kernel<<<blocks, threads, 0, stream>>>(
-        params, grads, m, v, size, beta1, beta2, epsilon, lr, beta1_corr, beta2_corr
-    );
+    adam_step_kernel<<<blocks, threads, 0, stream>>>(params, grads, m, v, size, beta1, beta2, epsilon, lr, beta1_corr, beta2_corr);
 }

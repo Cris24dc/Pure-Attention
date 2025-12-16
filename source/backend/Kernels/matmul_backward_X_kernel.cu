@@ -1,7 +1,6 @@
 // headers
 #include <backend/Kernels.cuh>
 
-// gradientul fata de stratul anterior (inputul X al stratului curent)
 // grad_x_in=grad_y_out*W.T
 __global__ void matmul_backward_X_kernel(
     const float32_t *grad_Y_out, // M x K (batch x out)
@@ -25,8 +24,8 @@ __global__ void matmul_backward_X_kernel(
         const uint32_t global_row_Y = global_row_gr_X;
         const uint32_t global_col_Y = i * TILE_WIDTH + tx;
 
-        const uint32_t global_row_WT = blockIdx.x * TILE_WIDTH + ty; // ty parcurge N
-        const uint32_t global_col_WT = i * TILE_WIDTH + tx;          // tx pe K
+        const uint32_t global_row_WT = blockIdx.x * TILE_WIDTH + ty;
+        const uint32_t global_col_WT = i * TILE_WIDTH + tx;
 
         if (global_row_Y < M && global_col_Y < K) {
             s_grad_Y[ty][tx] = grad_Y_out[global_row_Y * K + global_col_Y];
@@ -50,6 +49,6 @@ __global__ void matmul_backward_X_kernel(
     }
 
     if (global_col_gr_X < N && global_row_gr_X < M) {
-        grad_X_in[global_row_gr_X * N + global_col_gr_X]=sum;
+        grad_X_in[global_row_gr_X * N + global_col_gr_X]+=sum;
     }
 }

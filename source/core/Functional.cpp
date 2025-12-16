@@ -88,7 +88,6 @@ namespace core {
         if (N == 0)
             N = 1;
 
-
         launch_zero_population(A->get_data_ptr(), M, N, stream);
     }
 
@@ -98,7 +97,6 @@ namespace core {
 
         if (N == 0)
             N = 1;
-
 
         launch_zero_population(A->get_gradient_ptr(), M, N, stream);
     }
@@ -122,7 +120,6 @@ namespace core {
         if (N == 0)
             N = 1;
 
-
         launch_ones_population(A->get_gradient_ptr(), M, N, stream);
     }
 
@@ -144,7 +141,6 @@ namespace core {
 
         if (N == 0)
             N = 1;
-
 
         launch_normal_population(A->get_data_ptr(), M, N, std_dev, stream);
     }
@@ -173,48 +169,5 @@ namespace core {
         }
 
         return loss;
-    }
-
-    std::shared_ptr<Tensor> flash_attention(
-        const std::shared_ptr<Tensor>& Q,
-        const std::shared_ptr<Tensor>& K,
-        const std::shared_ptr<Tensor>& V,
-        const cudaStream_t& stream = CudaContext::getStream()) {
-
-        // 1. Extragem dimensiunile
-        const std::vector<uint32_t>& shape = Q->get_shape();
-        uint32_t N = shape[0];
-        uint32_t L = shape[1];
-        uint32_t E = shape[2];
-
-        // NOTA: Aici presupunem H=8 conform discutiilor anterioare.
-        // Ideal ar fi sa il deduci din context sau sa il pasezi ca argument.
-        uint32_t H = 8;
-
-        bool needs_grad = Q->requires_grad() || K->requires_grad() || V->requires_grad();
-
-        // 2. Alocam Output-ul [N, L, E]
-        auto Out = std::make_shared<Tensor>(std::vector<uint32_t>{N, L, E}, needs_grad, false);
-
-        // 3. Alocam L_vec [N, H, L] pentru Backward (LogSumExp statistics)
-        // Acesta nu are nevoie de gradient propriu, e doar un buffer de statistici.
-        auto L_vec = std::make_shared<Tensor>(std::vector<uint32_t>{N, H, L}, false, false);
-
-        // 4. Lansam Kernel-ul (Forward pass)
-        // Nota: Trebuie sa actualizezi launch_flash_attention_v2 sa accepte si L_vec
-        launch_flash_attention(
-            Q, K, V,
-            Out,
-            stream
-        );
-
-        // 5. Construim Graful de Autograd
-        if (needs_grad) {
-            // Nodul trebuie sa salveze Q, K, V, Out si L_vec pentru backward
-            auto node = std::make_shared<FlashAttentionFunction>(Q, K, V, Out, L_vec);
-            Out->set_grad_fn(node);
-        }
-
-        return Out;
     }
 };
