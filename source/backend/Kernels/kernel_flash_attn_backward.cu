@@ -85,7 +85,7 @@ __global__ void __launch_bounds__(256) flash_attn_backward_kernel(
     __syncthreads();
 
     if (k_start_idx < L) {
-#pragma unroll
+        #pragma unroll
         for (int i = 0; i < Bc; ++i) {
             if (k_start_idx + i < L) {
                 #pragma unroll
@@ -214,38 +214,14 @@ __global__ void __launch_bounds__(256) flash_attn_backward_kernel(
 
 
 
-template __global__ void flash_attn_backward_kernel<16, 32, 64>(
-    const float* __restrict__,
-    const float* __restrict__,
-    const float* __restrict__,
-    const float* __restrict__,
-    const float* __restrict__,
-    const float* __restrict__,
-    const float* __restrict__,
-    float* __restrict__,
-    float* __restrict__,
-    float* __restrict__,
-    int,
-    int,
-    int,
-    int,
-    float
+template __global__ void __launch_bounds__(256) flash_attn_backward_kernel<64, 16, 64>(
+    const float*, const float*, const float*, const float*, const float*,
+    const float*, const float*, float*, float*, float*,
+    int, int, int, int, float
 );
 
-template __global__ void flash_attn_backward_kernel<16, 32, 32>(
-    const float* __restrict__,
-    const float* __restrict__,
-    const float* __restrict__,
-    const float* __restrict__,
-    const float* __restrict__,
-    const float* __restrict__,
-    const float* __restrict__,
-    float* __restrict__,
-    float* __restrict__,
-    float* __restrict__,
-    int,
-    int,
-    int,
-    int,
-    float
+template __global__ void __launch_bounds__(256) flash_attn_backward_kernel<64, 16, 32>(
+    const float*, const float*, const float*, const float*, const float*,
+    const float*, const float*, float*, float*, float*,
+    int, int, int, int, float
 );
