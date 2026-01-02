@@ -134,17 +134,24 @@ void launch_mse_backward(
 }
 
 void launch_mse_forward(const float* preds, const float* targets, float* loss_out, int N, cudaStream_t stream) {
-    size_t total = static_cast<size_t>(N);
+    cudaGetLastError();
 
-    int device;
-    cudaGetDevice(&device);
-    cudaDeviceProp device_props{};
-    cudaGetDeviceProperties(&device_props, device);
+    int threads = 256;
+    size_t blocks = (N + threads - 1) / threads;
 
-    int threads = std::min(256, device_props.maxThreadsPerBlock);
-    size_t blocks = (total + threads - 1) / threads;
+    cudaError_t err_memset = cudaMemsetAsync(loss_out, 0, sizeof(float), stream);
+    if (err_memset != cudaSuccess) {
+        printf("CUDA Error in MSE Memset: %s\n", cudaGetErrorString(err_memset));
+        return;
+    }
 
     mse_forward_kernel<<<blocks, threads, 0, stream>>>(preds, targets, loss_out, N);
+
+    cudaError_t err_launch = cudaGetLastError();
+    if (err_launch != cudaSuccess) {
+        printf("CUDA Error in MSE Kernel Launch: %s\n", cudaGetErrorString(err_launch));
+    }
+
     mse_div_kernel<<<1, 1, 0, stream>>>(loss_out, N);
 }
 
