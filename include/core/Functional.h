@@ -62,4 +62,12 @@ namespace core {
         const std::vector<uint32_t>& new_shape,
         std::shared_ptr<Tensor>& output,
         const cudaStream_t& stream);
+    };
+    
+    void flash_attention(
+        const std::shared_ptr<Tensor>& Q,
+        const std::shared_ptr<Tensor>& K,
+        const std::shared_ptr<Tensor>& V,
+        std::shared_ptr<Tensor>& O,
+        const cudaStream_t& stream);
 };

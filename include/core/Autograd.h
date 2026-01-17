@@ -66,4 +66,20 @@ namespace core {
         ReshapeFunction(std::shared_ptr<Tensor> in, std::shared_ptr<Tensor> out);
         void apply_backward() override;
     };
+  
+    struct FlashAttentionFunction : public Function {
+        std::shared_ptr<Tensor> Q_input;
+        std::shared_ptr<Tensor> K_input;
+        std::shared_ptr<Tensor> V_input;
+        std::weak_ptr<Tensor> O_output;
+        std::shared_ptr<Tensor> L_cache;
+
+        FlashAttentionFunction(const std::shared_ptr<Tensor>& q,
+                               const std::shared_ptr<Tensor>& k,
+                               const std::shared_ptr<Tensor>& v,
+                               const std::shared_ptr<Tensor>& o,
+                               const std::shared_ptr<Tensor>& lcache);
+
+        void apply_backward() override;
+    };
 };

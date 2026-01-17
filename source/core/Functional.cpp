@@ -242,6 +242,37 @@ namespace core {
         if (needs_grad) {
             auto node = std::make_shared<ReshapeFunction>(input, output);
             output->set_grad_fn(node);
+         }
+    }
+  
+    void flash_attention(const std::shared_ptr<Tensor>& Q, const std::shared_ptr<Tensor>& K,
+        const std::shared_ptr<Tensor>& V, std::shared_ptr<Tensor>& O,
+        const cudaStream_t& stream = CudaContext::getStream()) {
+        
+        const int N = Q->get_shape()[0];
+        const int L = Q->get_shape()[1];
+        
+        // Valorile hardcodate trebuie sa coincida cu cele din launcher pentru alocarea corecta a cache-ului
+        const int H = 8; 
+        const int B_r = 16;
+        uint32_t Tr = (L + B_r - 1) / B_r;
+
+        bool needs_grad = Q->requires_grad() || K->requires_grad() || V->requires_grad();
+
+        O = std::make_shared<Tensor>(Q->get_shape(), needs_grad, false);
+        
+        // Alocam L_cache pentru Backward pass: [Batch, Heads, Row_Blocks]
+        auto L_cache = std::make_shared<Tensor>(std::vector<uint32_t>{(uint32_t)N, (uint32_t)H, Tr}, false, false);
+
+        launch_flash_attention(
+            Q, K, V, O,
+            L_cache,
+            stream
+        );
+
+        if (needs_grad) {
+            auto node = std::make_shared<FlashAttentionFunction>(Q, K, V, O, L_cache);
+            O->set_grad_fn(node);
         }
     }
 };

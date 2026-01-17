@@ -17,7 +17,7 @@ namespace layers{
         MultiheadAttention(uint32_t embed_dim, uint32_t num_heads);
 
         std::shared_ptr<core::Tensor> forward(const std::shared_ptr<core::Tensor> &input) override;
-        std::shared_ptr<core::Tensor> forward(const std::shared_ptr<core::Tensor> &query,const std::shared_ptr<core::Tensor> &key,const std::shared_ptr<core::Tensor> &value);
+        std::shared_ptr<core::Tensor> forward(const std::shared_ptr<core::Tensor> &query, const std::shared_ptr<core::Tensor> &key, const std::shared_ptr<core::Tensor> &value);
         std::vector<std::shared_ptr<core::Tensor>> parameters() override;
 
     };

@@ -153,5 +153,21 @@ void launch_concat_backward(
     uint32_t inner_size,
     uint32_t split_size,
     uint32_t total_elements,
+      cudaStream_t stream
+);
+
+void launch_flash_attention(
+    const std::shared_ptr<core::Tensor>& Q,
+    const std::shared_ptr<core::Tensor>& K,
+    const std::shared_ptr<core::Tensor>& V,
+    std::shared_ptr<core::Tensor>& O,
+    std::shared_ptr<core::Tensor>& L_cache,
+    cudaStream_t stream
+);
+
+void launch_flash_backward(
+    float* Q, float* K, float* V, float* O, float* dO, float* L_vec,
+    float* dQ, float* dK, float* dV,
+    int N, int H, int L, int E,
     cudaStream_t stream
 );
