@@ -8,11 +8,11 @@ import time
 class HousingModel(pa.Module):
     def __init__(self, input_dim):
         super().__init__()
-        self.l1 = pa.Linear(input_dim, 16)
+        self.l1 = pa.Linear(input_dim, 64)
         self.relu = pa.ReLU()
-        self.l2 = pa.Linear(16, 32)
+        self.l2 = pa.Linear(64, 256)
         self.relu2 = pa.ReLU()
-        self.l3 = pa.Linear(32, 1)
+        self.l3 = pa.Linear(256, 1)
 
     def forward(self, x):
         x = self.l1.forward(x)
@@ -55,7 +55,7 @@ def main():
 
     model = HousingModel(input_dim=IN)
 
-    optimizer = pa.Adam(model.parameters(), lr=0.00001)
+    optimizer = pa.Adam(model.parameters(), lr=5e-7)
     criterion = pa.MSE()
 
     print("Start training...")

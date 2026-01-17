@@ -102,4 +102,81 @@ namespace core {
         }
     }
 
+    FlashAttentionFunction::FlashAttentionFunction(
+        const std::shared_ptr<Tensor>& q,
+        const std::shared_ptr<Tensor>& k,
+        const std::shared_ptr<Tensor>& v,
+        const std::shared_ptr<Tensor>& o,
+        const std::shared_ptr<Tensor>& lcache)
+        : Q_input(q), K_input(k), V_input(v), O_output(o), L_cache(lcache) {}
+
+    void FlashAttentionFunction::apply_backward() {
+        auto out_ptr = O_output.lock();
+        if (!out_ptr) return;
+
+        const int N = Q_input->get_shape()[0];
+        const int L = Q_input->get_shape()[1];
+        const int E = Q_input->get_shape()[2];
+        const int H = 8;
+        const int D = E / H;
+
+        const cudaStream_t stream = CudaContext::getStream();
+
+        float* dQ = Q_input->get_gradient_ptr();
+        float* dK = K_input->get_gradient_ptr();
+        float* dV = V_input->get_gradient_ptr();
+
+        bool alloc_dQ = false, alloc_dK = false, alloc_dV = false;
+
+        size_t bytes = (size_t)N * H * L * D * sizeof(float);
+
+        if (Q_input->requires_grad() && !dQ) {
+            cudaMallocAsync(&dQ, bytes, stream);
+            alloc_dQ = true;
+        }
+        if (K_input->requires_grad() && !dK) {
+            cudaMallocAsync(&dK, bytes, stream);
+            alloc_dK = true;
+        }
+        if (V_input->requires_grad() && !dV) {
+            cudaMallocAsync(&dV, bytes, stream);
+            alloc_dV = true;
+        }
+
+        // call backward launcher
+        launch_flash_backward(
+            Q_input->get_data_ptr(), K_input->get_data_ptr(), V_input->get_data_ptr(),
+            out_ptr->get_data_ptr(), out_ptr->get_gradient_ptr(), L_cache->get_data_ptr(),
+            dQ, dK, dV,
+            N, H, L, E,
+            stream
+        );
+
+        // propagate gradients
+        if (Q_input->requires_grad()) {
+            if (alloc_dQ) {
+                // copy temporary dQ into tensor gradient
+                cudaMemcpyAsync(Q_input->get_gradient_ptr(), dQ, bytes, cudaMemcpyDeviceToDevice, stream);
+                cudaFreeAsync(dQ, stream);
+            }
+            Q_input->backward(false);
+        }
+
+        if (K_input->requires_grad()) {
+            if (alloc_dK) {
+                cudaMemcpyAsync(K_input->get_gradient_ptr(), dK, bytes, cudaMemcpyDeviceToDevice, stream);
+                cudaFreeAsync(dK, stream);
+            }
+            K_input->backward(false);
+        }
+
+        if (V_input->requires_grad()) {
+            if (alloc_dV) {
+                cudaMemcpyAsync(V_input->get_gradient_ptr(), dV, bytes, cudaMemcpyDeviceToDevice, stream);
+                cudaFreeAsync(dV, stream);
+            }
+            V_input->backward(false);
+        }
+    }
+
 }
