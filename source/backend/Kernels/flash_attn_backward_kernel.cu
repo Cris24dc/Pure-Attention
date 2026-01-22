@@ -1,4 +1,5 @@
 #include <backend/Kernels.cuh>
+#include <stdio.h>
 
 
 #define WARP_SIZE 32
@@ -74,9 +75,16 @@ __global__ void __launch_bounds__(256) flash_attn_backward_kernel(
     int bx = blockIdx.x;
     int by = blockIdx.y;
 
+    int num_heads = stride_seq / stride_head;
+    int batch_idx = by / num_heads;
+    int head_idx = by % num_heads;
+
     int k_start_idx = bx * Bc;
-    int offset_base = by * L * D;
-    int vector_base = by * L;
+
+    int offset_base = batch_idx * stride_batch + head_idx * stride_head;
+    
+    int delta_base_offset = batch_idx * (L * num_heads) + head_idx;
+
 
     for (int i = tx; i < Bc * PADDED_D; i += blockDim.x) {
         if (i < Bc * PADDED_D) { sdK[i] = 0.0f; }
@@ -88,9 +96,11 @@ __global__ void __launch_bounds__(256) flash_attn_backward_kernel(
         #pragma unroll
         for (int i = 0; i < Bc; ++i) {
             if (k_start_idx + i < L) {
+                int seq_offset = (k_start_idx + i) * stride_seq;
                 #pragma unroll
                 for (int x = tx * 4; x < D; x += blockDim.x * 4) {
-                    int global_idx = (k_start_idx + i) * D + x;
+                    int global_idx = seq_offset + x;
+                    
                     float4 val_k = load_float4(K + offset_base, global_idx / 4);
                     float4 val_v = load_float4(V + offset_base, global_idx / 4);
 
@@ -117,9 +127,11 @@ __global__ void __launch_bounds__(256) flash_attn_backward_kernel(
         #pragma unroll
         for (int row = 0; row < Br; ++row) {
             if (q_start_idx + row < L) {
+                int seq_offset = (q_start_idx + row) * stride_seq;
                 #pragma unroll
                 for (int x = tx * 4; x < D; x += blockDim.x * 4) {
-                    int global_idx = (q_start_idx + row) * D + x;
+                    int global_idx = seq_offset + x;
+                    
                     float4 val_q = load_float4(Q + offset_base, global_idx / 4);
                     float4 val_do = load_float4(dO + offset_base, global_idx / 4);
 
@@ -142,8 +154,12 @@ __global__ void __launch_bounds__(256) flash_attn_backward_kernel(
             int global_q = q_start_idx + q_row;
             if (global_q >= L) continue;
 
+            int vector_base = by * L;
+            
             float l_val = L_vec[vector_base + global_q];
-            float delta_val = Delta[vector_base + global_q];
+            
+            int delta_idx = delta_base_offset + global_q * num_heads;
+            float delta_val = Delta[delta_idx];
 
             for (int k_idx = tx; k_idx < Bc; k_idx += blockDim.x) {
 
@@ -169,7 +185,8 @@ __global__ void __launch_bounds__(256) flash_attn_backward_kernel(
                     float warp_sum = warp_reduce_sum(my_val);
 
                     if ((threadIdx.x % WARP_SIZE) == 0) {
-                        atomicAdd(&dQ[offset_base + global_q * D + x], warp_sum);
+                        int q_offset = global_q * stride_seq + x;
+                        dQ[offset_base + q_offset] += 1.0f; // DEBUG FORCE
                     }
                 }
 
@@ -187,25 +204,31 @@ __global__ void __launch_bounds__(256) flash_attn_backward_kernel(
         #pragma unroll
         for (int i = 0; i < Bc; ++i) {
             if (k_start_idx + i < L) {
+                int seq_offset = (k_start_idx + i) * stride_seq;
                 #pragma unroll
                 for (int x = tx * 4; x < D; x += blockDim.x * 4) {
-                    int global_idx = (k_start_idx + i) * D + x;
+                    int global_idx = seq_offset + x;
                     int sram_idx = i * PADDED_D + x;
 
-                    float4 val_dk;
-                    val_dk.x = sdK[sram_idx + 0];
-                    val_dk.y = sdK[sram_idx + 1];
-                    val_dk.z = sdK[sram_idx + 2];
-                    val_dk.w = sdK[sram_idx + 3];
+                    float val_dk0 = sdK[sram_idx + 0];
+                    float val_dk1 = sdK[sram_idx + 1];
+                    float val_dk2 = sdK[sram_idx + 2];
+                    float val_dk3 = sdK[sram_idx + 3];
 
-                    float4 val_dv;
-                    val_dv.x = sdV[sram_idx + 0];
-                    val_dv.y = sdV[sram_idx + 1];
-                    val_dv.z = sdV[sram_idx + 2];
-                    val_dv.w = sdV[sram_idx + 3];
+                    float val_dv0 = sdV[sram_idx + 0];
+                    float val_dv1 = sdV[sram_idx + 1];
+                    float val_dv2 = sdV[sram_idx + 2];
+                    float val_dv3 = sdV[sram_idx + 3];
 
-                    store_float4(dK + offset_base, global_idx / 4, val_dk);
-                    store_float4(dV + offset_base, global_idx / 4, val_dv);
+                    atomicAdd(dK + offset_base + global_idx, val_dk0);
+                    atomicAdd(dK + offset_base + global_idx + 1, val_dk1);
+                    atomicAdd(dK + offset_base + global_idx + 2, val_dk2);
+                    atomicAdd(dK + offset_base + global_idx + 3, val_dk3);
+
+                    atomicAdd(dV + offset_base + global_idx, val_dv0);
+                    atomicAdd(dV + offset_base + global_idx + 1, val_dv1);
+                    atomicAdd(dV + offset_base + global_idx + 2, val_dv2);
+                    atomicAdd(dV + offset_base + global_idx + 3, val_dv3);
                 }
             }
         }
@@ -220,7 +243,7 @@ template __global__ void __launch_bounds__(256) flash_attn_backward_kernel<64, 1
     int, int, int, int, float
 );
 
-template __global__ void __launch_bounds__(256) flash_attn_backward_kernel<64, 16, 32>(
+template __global__ void __launch_bounds__(256) flash_attn_backward_kernel<32, 16, 32>(
     const float*, const float*, const float*, const float*, const float*,
     const float*, const float*, float*, float*, float*,
     int, int, int, int, float

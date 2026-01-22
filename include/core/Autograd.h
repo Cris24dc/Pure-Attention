@@ -50,8 +50,8 @@ namespace core {
     };
 
     struct SplitFunction : public Function {
-        std::weak_ptr<Tensor> Input;
-        std::vector<std::shared_ptr<Tensor>> Outputs;
+        std::shared_ptr<Tensor> Input;
+        std::vector<std::weak_ptr<Tensor>> Outputs;
 
         SplitFunction(std::shared_ptr<Tensor> in, std::vector<std::shared_ptr<Tensor>> outs);
 
@@ -80,6 +80,34 @@ namespace core {
                                const std::shared_ptr<Tensor>& o,
                                const std::shared_ptr<Tensor>& lcache);
 
+        void apply_backward() override;
+    };
+
+
+
+
+
+
+    struct LayerNormFunction : public Function {
+        std::shared_ptr<Tensor> input;
+        std::shared_ptr<Tensor> gamma;
+        std::shared_ptr<Tensor> beta;
+        std::weak_ptr<Tensor> output;
+        std::shared_ptr<Tensor> mean;
+        std::shared_ptr<Tensor> rstd;
+        uint32_t M;
+        uint32_t N;
+        
+        LayerNormFunction(
+            const std::shared_ptr<Tensor>& inp,
+            const std::shared_ptr<Tensor>& g,
+            const std::shared_ptr<Tensor>& b,
+            const std::shared_ptr<Tensor>& out,
+            const std::shared_ptr<Tensor>& m,
+            const std::shared_ptr<Tensor>& r,
+            uint32_t m_size,
+            uint32_t n_size);
+        
         void apply_backward() override;
     };
 };

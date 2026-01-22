@@ -171,3 +171,32 @@ void launch_flash_backward(
     int N, int H, int L, int E,
     cudaStream_t stream
 );
+
+
+
+void launch_layer_norm_forward(
+    const float* input,
+    const float* gamma,
+    const float* beta,
+    float* output,
+    float* mean,
+    float* rstd,
+    uint32_t M,
+    uint32_t N,
+    float epsilon,
+    cudaStream_t stream
+);
+
+void launch_layer_norm_backward(
+    const float* grad_output,
+    const float* input,
+    const float* mean,
+    const float* rstd,
+    const float* gamma,
+    float* grad_input,
+    float* grad_gamma,
+    float* grad_beta,
+    uint32_t M,
+    uint32_t N,
+    cudaStream_t stream
+);

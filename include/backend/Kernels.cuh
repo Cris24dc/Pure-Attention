@@ -172,3 +172,31 @@ __global__ void concat_last_dim_kernel(
     uint32_t split_size,
     uint32_t total_elements
 );
+
+
+
+
+__global__ void layer_norm_forward_kernel(
+    const float* __restrict__ input,
+    const float* __restrict__ gamma,
+    const float* __restrict__ beta,
+    float* __restrict__ output,
+    float* __restrict__ mean,
+    float* __restrict__ rstd,
+    uint32_t M,
+    uint32_t N,
+    float epsilon
+);
+
+__global__ void layer_norm_backward_kernel(
+    const float* __restrict__ grad_output,
+    const float* __restrict__ input,
+    const float* __restrict__ mean,
+    const float* __restrict__ rstd,
+    const float* __restrict__ gamma,
+    float* __restrict__ grad_input,
+    float* __restrict__ grad_gamma,
+    float* __restrict__ grad_beta,
+    uint32_t M,
+    uint32_t N
+);

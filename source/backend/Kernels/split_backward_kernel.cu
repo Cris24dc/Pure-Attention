@@ -18,5 +18,5 @@ __global__ void concat_last_dim_kernel(
     int split_idx = col / split_size;
     int col_in_split = col % split_size;
 
-    output[idx] = inputs[split_idx][row * split_size + col_in_split];
+    atomicAdd(output + idx, inputs[split_idx][row * split_size + col_in_split]);
 }

@@ -18,24 +18,30 @@ void launch_flash_backward(
 
     cudaMemsetAsync(dQ, 0, N * H * L * D * sizeof(float), stream);
 
-    const int Bc = 64;
+    const int Bc = 32;
     const int Br = 16;
     const int PAD = 8;
 
     dim3 grid((L + Bc - 1) / Bc, N * H);
-    dim3 block(256);
+    dim3 block(64);
 
 
     size_t smem_size = (4 * Bc * (D + PAD) + 2 * Br * (D + PAD)) * sizeof(float);
 
+    int stride_batch = L * H * D;
+    int stride_seq = H * D;
+    int stride_head = D;
+
     if (D == 64) {
         flash_attn_backward_kernel<64, 16, 64><<<grid, block, smem_size, stream>>>(
-            Q, K, V, O, dO, L_vec, d_Delta, dQ, dK, dV, H, 1, E, L, sm_scale
+            Q, K, V, O, dO, L_vec, d_Delta, dQ, dK, dV, 
+            stride_batch, stride_head, stride_seq, L, sm_scale
         );
     }
     else if (D == 32) {
-        flash_attn_backward_kernel<64, 16, 32><<<grid, block, smem_size, stream>>>(
-           Q, K, V, O, dO, L_vec, d_Delta, dQ, dK, dV, H, 1, E, L, sm_scale
+        flash_attn_backward_kernel<32, 16, 32><<<grid, block, smem_size, stream>>>(
+           Q, K, V, O, dO, L_vec, d_Delta, dQ, dK, dV, 
+           stride_batch, stride_head, stride_seq, L, sm_scale
        );
     }
 

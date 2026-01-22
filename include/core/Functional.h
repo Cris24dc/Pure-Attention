@@ -71,4 +71,12 @@ namespace core {
         const std::shared_ptr<Tensor>& V,
         std::shared_ptr<Tensor>& O,
         const cudaStream_t& stream);
+
+
+    std::shared_ptr<Tensor> layer_norm(
+        const std::shared_ptr<Tensor>& input,
+        const std::shared_ptr<Tensor>& gamma,
+        const std::shared_ptr<Tensor>& beta,
+        float epsilon,
+        const cudaStream_t& stream);
 };
