@@ -16,10 +16,14 @@ void launch_split_forward(
 
     cudaMemcpyAsync(d_out_ptrs, output_list.data(), num_splits * sizeof(float32_t*), cudaMemcpyHostToDevice, stream);
     
-    int threads = 256;
-    int blocks = (total_elements + threads - 1) / threads;
+    static int minGridSize = 0;
+    static int blockSize = 0;
+    if (blockSize == 0) {
+        cudaOccupancyMaxPotentialBlockSize(&minGridSize, &blockSize, split_last_dim_kernel, 0, 0);
+    }
+    int grids = (total_elements + blockSize - 1) / blockSize;
 
-    split_last_dim_kernel<<<blocks, threads, 0, stream>>>(
+    split_last_dim_kernel<<<grids, blockSize, 0, stream>>>(
         input,
         d_out_ptrs,
         num_splits,

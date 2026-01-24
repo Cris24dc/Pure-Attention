@@ -15,10 +15,16 @@ void launch_layer_norm_backward(
     uint32_t N,
     cudaStream_t stream
 ) {
-    const int threads = 256;
-    const int blocks = M;
+    static int minGridSize = 0;
+    static int maxBlockSize = 0;
+    if (maxBlockSize == 0) {
+        cudaOccupancyMaxPotentialBlockSize(&minGridSize, &maxBlockSize, layer_norm_backward_kernel, 0, 0);
+    }
     
-    layer_norm_backward_kernel<<<blocks, threads, 0, stream>>>(
+    // Don't launch more threads than N
+    int blockSize = (N < maxBlockSize) ? ((N + 31) / 32 * 32) : maxBlockSize;
+    int grids = M;
+    layer_norm_backward_kernel<<<grids, blockSize, 0, stream>>>(
         grad_output, input, mean, rstd, gamma,
         grad_input, grad_gamma, grad_beta, M, N
     );

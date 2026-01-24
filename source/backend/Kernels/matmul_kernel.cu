@@ -11,7 +11,7 @@ __global__ void matmul_kernel_tiled(const float *A, const float *B, float *C, in
     const uint32_t global_row = TILE_WIDTH * blockIdx.y + ty;
     const uint32_t global_col = TILE_WIDTH * blockIdx.x + tx;
 
-    const uint32_t tile_num_reduction=(K+TILE_WIDTH-1)/TILE_WIDTH;
+    const uint32_t tile_num_reduction = (K + TILE_WIDTH - 1) / TILE_WIDTH;
     float32_t val = 0.0f;
 
     for(int m = 0; m < tile_num_reduction; m += 1) {

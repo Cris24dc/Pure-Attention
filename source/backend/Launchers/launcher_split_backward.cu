@@ -16,10 +16,14 @@ void launch_concat_backward(
     cudaMallocAsync(&d_in_ptrs, num_splits * sizeof(float*), stream);
     cudaMemcpyAsync(d_in_ptrs, input_grads.data(), num_splits * sizeof(float*), cudaMemcpyHostToDevice, stream);
 
-    int threads = 256;
-    int blocks = (total_elements + threads - 1) / threads;
+    static int minGridSize = 0;
+    static int blockSize = 0;
+    if (blockSize == 0) {
+        cudaOccupancyMaxPotentialBlockSize(&minGridSize, &blockSize, concat_last_dim_kernel, 0, 0);
+    }
+    int grids = (total_elements + blockSize - 1) / blockSize;
 
-    concat_last_dim_kernel<<<blocks, threads, 0, stream>>>(
+    concat_last_dim_kernel<<<grids, blockSize, 0, stream>>>(
         d_in_ptrs,
         output_grad,
         num_splits,
