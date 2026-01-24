@@ -3,6 +3,8 @@
 // libs
 #include <memory>
 
+#include <core/Tensor.h>
+
 namespace core {
     void matmul(
         const std::shared_ptr<Tensor>& A, 
@@ -62,12 +64,19 @@ namespace core {
         const std::vector<uint32_t>& new_shape,
         std::shared_ptr<Tensor>& output,
         const cudaStream_t& stream);
-    };
-    
+
     void flash_attention(
         const std::shared_ptr<Tensor>& Q,
         const std::shared_ptr<Tensor>& K,
         const std::shared_ptr<Tensor>& V,
         std::shared_ptr<Tensor>& O,
+        const cudaStream_t& stream);
+
+
+    std::shared_ptr<Tensor> layer_norm(
+        const std::shared_ptr<Tensor>& input,
+        const std::shared_ptr<Tensor>& gamma,
+        const std::shared_ptr<Tensor>& beta,
+        float epsilon,
         const cudaStream_t& stream);
 };

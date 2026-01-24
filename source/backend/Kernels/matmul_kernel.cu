@@ -11,7 +11,7 @@ __global__ void matmul_kernel_tiled(const float *A, const float *B, float *C, in
     const uint32_t global_row = TILE_WIDTH * blockIdx.y + ty;
     const uint32_t global_col = TILE_WIDTH * blockIdx.x + tx;
 
-    const uint32_t tile_num_reduction=(N+TILE_WIDTH-1)/TILE_WIDTH;
+    const uint32_t tile_num_reduction = (K + TILE_WIDTH - 1) / TILE_WIDTH;
     float32_t val = 0.0f;
 
     for(int m = 0; m < tile_num_reduction; m += 1) {
@@ -21,15 +21,15 @@ __global__ void matmul_kernel_tiled(const float *A, const float *B, float *C, in
         const uint32_t global_read_row_B = m * TILE_WIDTH + ty;
         const uint32_t global_read_col_B = global_col;
         
-        if(global_read_col_A < N && global_read_row_A < M) {
-            s_A[ty][tx] = A[global_read_row_A * N + global_read_col_A];
+        if(global_read_col_A < K && global_read_row_A < M) {
+            s_A[ty][tx] = A[global_read_row_A * K + global_read_col_A];
         }
         else {
             s_A[ty][tx] = 0.0f;
         }
 
-        if(global_read_col_B < K && global_read_row_B < N) {
-            s_B[ty][tx] = B[global_read_row_B * K + global_read_col_B];
+        if(global_read_col_B < N && global_read_row_B < K) {
+            s_B[ty][tx] = B[global_read_row_B * N + global_read_col_B];
         }
         else {
             s_B[ty][tx] = 0.0f;
@@ -44,7 +44,7 @@ __global__ void matmul_kernel_tiled(const float *A, const float *B, float *C, in
         __syncthreads();
     } 
 
-    if (global_row < M && global_col < K) {
-        C[global_row * K + global_col] = val;
+    if (global_row < M && global_col < N) {
+        C[global_row * N + global_col] = val;
     }
 }

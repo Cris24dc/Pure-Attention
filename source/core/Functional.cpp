@@ -6,17 +6,36 @@
 
 // libs
 #include <memory>
+#include <stdexcept>
 
 namespace core {
     void matmul(const std::shared_ptr<Tensor>& A, const std::shared_ptr<Tensor>& B,
         std::shared_ptr<Tensor>& C, const cudaStream_t& stream = CudaContext::getStream()) {
-        const uint32_t M = A->get_shape()[0];
-        const uint32_t N = A->get_shape()[1];
-        const uint32_t K = B->get_shape()[1];
+
+        const std::vector<uint32_t>& a_shape = A->get_shape();
+        const std::vector<uint32_t>& b_shape = B->get_shape();
+
+        if (b_shape.size() != 2) {
+            throw std::runtime_error("Matmul: B (weights) must be 2D");
+        }
+
+        uint32_t K = a_shape.back();
+        if (K != b_shape[0]) {
+            throw std::runtime_error("Matmul: Dimension mismatch A[..., K] and B[K, N]");
+        }
+        uint32_t N = b_shape[1];
+
+        uint32_t M = 1;
+        for (size_t i = 0; i < a_shape.size() - 1; ++i) {
+            M *= a_shape[i];
+        }
+        
+        std::vector<uint32_t> c_shape = a_shape;
+        c_shape.back() = N;
 
         bool needs_grad = A->requires_grad() || B->requires_grad();
 
-        C = std::make_shared<Tensor>(std::vector<uint32_t>{M, K}, needs_grad, false);
+        C = std::make_shared<Tensor>(c_shape, needs_grad, false);
 
         launch_matmul_tiled(
             A->get_data_ptr(), 
@@ -30,17 +49,23 @@ namespace core {
             auto node = std::make_shared<MatMulFunction>(A, B, C);
             C->set_grad_fn(node);
         }
-
     }
     
     void matadd(const std::shared_ptr<Tensor>& A, const std::shared_ptr<Tensor>& X,
         std::shared_ptr<Tensor>& B,const cudaStream_t& stream = CudaContext::getStream()) {
-        uint32_t M = A->get_shape()[0];
-        uint32_t N = A->get_shape()[1];
+        
+        const std::vector<uint32_t>& a_shape = A->get_shape();
+        const std::vector<uint32_t>& x_shape = X->get_shape();
+
+        uint32_t N = a_shape.back();
+        uint32_t M = 1;
+        for (size_t i = 0; i < a_shape.size() - 1; ++i) {
+            M *= a_shape[i];
+        }
 
         bool needs_grad = A->requires_grad() || X->requires_grad();
 
-        B = std::make_shared<Tensor>(std::vector<uint32_t>{M, N}, needs_grad, false);
+        B = std::make_shared<Tensor>(a_shape, needs_grad, false);
 
         launch_matadd_tiled(
             A->get_data_ptr(), 
@@ -58,12 +83,18 @@ namespace core {
 
     std::shared_ptr<Tensor> relu(const std::shared_ptr<Tensor>& In,
         const cudaStream_t& stream = CudaContext::getStream()) {
-        uint32_t M = In->get_shape()[0];
-        uint32_t N = In->get_shape()[1];
+        
+        const std::vector<uint32_t>& shape = In->get_shape();
+        
+        uint32_t N = shape.back();
+        uint32_t M = 1;
+        for (size_t i = 0; i < shape.size() - 1; ++i) {
+            M *= shape[i];
+        }
 
         bool needs_grad = In->requires_grad();
 
-        auto Out = std::make_shared<Tensor>(std::vector<uint32_t>{M, N},needs_grad,false);
+        auto Out = std::make_shared<Tensor>(shape, needs_grad, false);
 
         launch_ReLU_tiled(
             In->get_data_ptr(), 
@@ -252,7 +283,6 @@ namespace core {
         const int N = Q->get_shape()[0];
         const int L = Q->get_shape()[1];
         
-        // Valorile hardcodate trebuie sa coincida cu cele din launcher pentru alocarea corecta a cache-ului
         const int H = 8; 
         const int B_r = 16;
         uint32_t Tr = (L + B_r - 1) / B_r;
@@ -261,7 +291,6 @@ namespace core {
 
         O = std::make_shared<Tensor>(Q->get_shape(), needs_grad, false);
         
-        // Alocam L_cache pentru Backward pass: [Batch, Heads, Row_Blocks]
         auto L_cache = std::make_shared<Tensor>(std::vector<uint32_t>{(uint32_t)N, (uint32_t)H, Tr}, false, false);
 
         launch_flash_attention(
@@ -275,4 +304,53 @@ namespace core {
             O->set_grad_fn(node);
         }
     }
+
+
+
+
+    std::shared_ptr<Tensor> layer_norm(
+        const std::shared_ptr<Tensor>& input,
+        const std::shared_ptr<Tensor>& gamma,
+        const std::shared_ptr<Tensor>& beta,
+        float epsilon,
+        const cudaStream_t& stream) 
+    {
+    auto shape = input->get_shape();
+    uint32_t M = 1;
+    for (size_t i = 0; i < shape.size() - 1; ++i) {
+        M *= shape[i];
+    }
+    uint32_t N = shape[shape.size() - 1];
+
+    auto output = std::make_shared<Tensor>(shape, input->requires_grad() || gamma->requires_grad() || beta->requires_grad());
+    auto mean = std::make_shared<Tensor>(std::vector<uint32_t>{M}, false);
+    auto rstd = std::make_shared<Tensor>(std::vector<uint32_t>{M}, false);
+
+    launch_layer_norm_forward(
+        input->get_data_ptr(),
+        gamma->get_data_ptr(),
+        beta->get_data_ptr(),
+        output->get_data_ptr(),
+        mean->get_data_ptr(),
+        rstd->get_data_ptr(),
+        M, N, epsilon,
+        stream
+    );
+
+    if (output->requires_grad()) {
+        if (gamma->requires_grad()) {
+            cudaMemsetAsync(gamma->get_gradient_ptr(), 0, N * sizeof(float), stream);
+        }
+        if (beta->requires_grad()) {
+            cudaMemsetAsync(beta->get_gradient_ptr(), 0, N * sizeof(float), stream);
+        }
+        
+        auto grad_fn = std::make_shared<LayerNormFunction>(
+            input, gamma, beta, output, mean, rstd, M, N
+        );
+        output->set_grad_fn(grad_fn);
+    }
+
+    return output;
+}
 };

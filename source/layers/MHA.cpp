@@ -48,10 +48,10 @@ namespace layers {
         reshape(qkv[2], flash_shape, V_reshaped, stream);
 
         std::shared_ptr<core::Tensor> attn_output;
-        // flash_attention(Q_reshaped, K_reshaped, V_reshaped, attn_output, stream);
+        flash_attention(Q_reshaped, K_reshaped, V_reshaped, attn_output, stream);
 
         std::shared_ptr<core::Tensor> final_output;
-        // reshape(attn_output, input_shape, final_output, stream);
+        reshape(attn_output, input_shape, final_output, stream);
 
         return final_output;
     }
@@ -89,10 +89,10 @@ namespace layers {
         reshape(V_proj, shape_kv, V_reshaped, stream);
 
         std::shared_ptr<core::Tensor> attn_output;
-        // flash_attention(Q_reshaped, K_reshaped, V_reshaped, attn_output, stream);
+        flash_attention(Q_reshaped, K_reshaped, V_reshaped, attn_output, stream);
 
         std::shared_ptr<core::Tensor> final_output;
-        // reshape(attn_output, q_shape, final_output, stream);
+        reshape(attn_output, q_shape, final_output, stream);
 
         return final_output;
     }
