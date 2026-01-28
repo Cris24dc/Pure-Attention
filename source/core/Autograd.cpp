@@ -204,8 +204,9 @@ namespace core {
         const std::shared_ptr<Tensor>& k,
         const std::shared_ptr<Tensor>& v,
         const std::shared_ptr<Tensor>& o,
-        const std::shared_ptr<Tensor>& lcache)
-        : Q_input(q), K_input(k), V_input(v), O_output(o), L_cache(lcache) {}
+        const std::shared_ptr<Tensor>& lcache,
+        int heads)
+        : Q_input(q), K_input(k), V_input(v), O_output(o), L_cache(lcache), num_heads(heads) {}
 
     void FlashAttentionFunction::apply_backward() {
         auto out_ptr = O_output.lock();
@@ -214,7 +215,7 @@ namespace core {
         const int N = Q_input->get_shape()[0];
         const int L = Q_input->get_shape()[1];
         const int E = Q_input->get_shape()[2];
-        const int H = 8;
+        const int H = num_heads;
         const int D = E / H;
 
         const cudaStream_t stream = CudaContext::getStream();

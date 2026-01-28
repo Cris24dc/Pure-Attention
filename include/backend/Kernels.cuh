@@ -188,15 +188,24 @@ __global__ void layer_norm_forward_kernel(
     float epsilon
 );
 
-__global__ void layer_norm_backward_kernel(
+__global__ void ln_backward_param_grad_kernel(
+    const float* __restrict__ grad_output,
+    const float* __restrict__ input,
+    const float* __restrict__ mean,
+    const float* __restrict__ rstd,
+    float* __restrict__ grad_gamma,
+    float* __restrict__ grad_beta,
+    uint32_t M,
+    uint32_t N
+);
+
+__global__ void ln_backward_input_grad_kernel(
     const float* __restrict__ grad_output,
     const float* __restrict__ input,
     const float* __restrict__ mean,
     const float* __restrict__ rstd,
     const float* __restrict__ gamma,
     float* __restrict__ grad_input,
-    float* __restrict__ grad_gamma,
-    float* __restrict__ grad_beta,
     uint32_t M,
     uint32_t N
 );

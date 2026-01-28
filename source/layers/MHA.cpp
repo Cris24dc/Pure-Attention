@@ -33,25 +33,12 @@ namespace layers {
         std::vector<std::shared_ptr<core::Tensor>> qkv;
         split(proj_output, 3, -1, qkv, stream);
 
-        std::shared_ptr<core::Tensor> Q_reshaped, K_reshaped, V_reshaped;
-        std::vector<uint32_t> input_shape = input->get_shape();
-        
-        std::vector<uint32_t> flash_shape = {
-            input_shape[0], 
-            input_shape[1], 
-            num_heads,         
-            head_dim           
-        };
-
-        reshape(qkv[0], flash_shape, Q_reshaped, stream);
-        reshape(qkv[1], flash_shape, K_reshaped, stream);
-        reshape(qkv[2], flash_shape, V_reshaped, stream);
-
         std::shared_ptr<core::Tensor> attn_output;
-        flash_attention(Q_reshaped, K_reshaped, V_reshaped, attn_output, stream);
+        flash_attention(qkv[0], qkv[1], qkv[2], attn_output, num_heads, stream);
 
         std::shared_ptr<core::Tensor> final_output;
-        reshape(attn_output, input_shape, final_output, stream);
+        // reshape(attn_output, input_shape, final_output, stream);
+        final_output = attn_output;
 
         return final_output;
     }
@@ -76,23 +63,12 @@ namespace layers {
         matmul(value, w_parts[2], tmp_v, stream);
         matadd(tmp_v, b_parts[2], V_proj, stream);
 
-        std::shared_ptr<core::Tensor> Q_reshaped, K_reshaped, V_reshaped;
-        
-        std::vector<uint32_t> q_shape = query->get_shape();
-        std::vector<uint32_t> k_shape = key->get_shape();
-
-        std::vector<uint32_t> shape_q = {q_shape[0], q_shape[1], num_heads, head_dim};
-        std::vector<uint32_t> shape_kv = {k_shape[0], k_shape[1], num_heads, head_dim};
-
-        reshape(Q_proj, shape_q, Q_reshaped, stream);
-        reshape(K_proj, shape_kv, K_reshaped, stream);
-        reshape(V_proj, shape_kv, V_reshaped, stream);
-
         std::shared_ptr<core::Tensor> attn_output;
-        flash_attention(Q_reshaped, K_reshaped, V_reshaped, attn_output, stream);
+        flash_attention(Q_proj, K_proj, V_proj, attn_output, num_heads, stream);
 
         std::shared_ptr<core::Tensor> final_output;
-        reshape(attn_output, q_shape, final_output, stream);
+        // reshape(attn_output, q_shape, final_output, stream);
+        final_output = attn_output;
 
         return final_output;
     }

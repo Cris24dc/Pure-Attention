@@ -162,6 +162,7 @@ void launch_flash_attention(
     const std::shared_ptr<core::Tensor>& V,
     std::shared_ptr<core::Tensor>& O,
     std::shared_ptr<core::Tensor>& L_cache,
+    int num_heads,
     cudaStream_t stream
 );
 

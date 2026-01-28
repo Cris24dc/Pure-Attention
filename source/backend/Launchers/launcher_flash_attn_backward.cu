@@ -44,6 +44,10 @@ void launch_flash_backward(
            stride_batch, stride_head, stride_seq, L, sm_scale
        );
     }
+    else {
+        printf("ERROR [FlashAttention Backward]: Unsupported Head Dimension D=%d. Only D=32 and D=64 are supported.\n", D);
+        throw std::runtime_error("FlashAttention Backward: Unsupported Head Dimension");
+    }
 
     cudaFreeAsync(d_Delta, stream);
 }

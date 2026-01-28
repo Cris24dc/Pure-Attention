@@ -278,12 +278,13 @@ namespace core {
   
     void flash_attention(const std::shared_ptr<Tensor>& Q, const std::shared_ptr<Tensor>& K,
         const std::shared_ptr<Tensor>& V, std::shared_ptr<Tensor>& O,
+        int num_heads,
         const cudaStream_t& stream = CudaContext::getStream()) {
         
         const int N = Q->get_shape()[0];
         const int L = Q->get_shape()[1];
         
-        const int H = 8; 
+        const int H = num_heads; 
         const int B_r = 16;
         uint32_t Tr = (L + B_r - 1) / B_r;
 
@@ -296,11 +297,12 @@ namespace core {
         launch_flash_attention(
             Q, K, V, O,
             L_cache,
+            num_heads,
             stream
         );
 
         if (needs_grad) {
-            auto node = std::make_shared<FlashAttentionFunction>(Q, K, V, O, L_cache);
+            auto node = std::make_shared<FlashAttentionFunction>(Q, K, V, O, L_cache, num_heads);
             O->set_grad_fn(node);
         }
     }

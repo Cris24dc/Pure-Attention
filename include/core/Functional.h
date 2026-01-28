@@ -70,6 +70,7 @@ namespace core {
         const std::shared_ptr<Tensor>& K,
         const std::shared_ptr<Tensor>& V,
         std::shared_ptr<Tensor>& O,
+        int num_heads,
         const cudaStream_t& stream);
 
 
