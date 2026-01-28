@@ -3,27 +3,32 @@ import numpy as np
 from sklearn.datasets import fetch_california_housing
 from sklearn.preprocessing import StandardScaler
 from sklearn.model_selection import train_test_split
+import matplotlib.pyplot as plt
 import time
 
 class HousingModel(pa.Module):
     def __init__(self, input_dim):
         super().__init__()
-        self.l1 = pa.Linear(input_dim, 64)
+        self.l1 = pa.Linear(input_dim, 128)
         self.relu = pa.ReLU()
-        self.l2 = pa.Linear(64, 256)
+        self.l2 = pa.Linear(128, 256)
         self.relu2 = pa.ReLU()
-        self.l3 = pa.Linear(256, 1)
+        self.l3 = pa.Linear(256, 64)
+        self.relu3 = pa.ReLU()
+        self.l4 = pa.Linear(64, 1)
 
     def forward(self, x):
         x = self.l1.forward(x)
         x = self.relu.forward(x)
         x = self.l2.forward(x)
-        x = self.relu.forward(x)
+        x = self.relu2.forward(x)
         x = self.l3.forward(x)
+        x = self.relu3.forward(x)
+        x = self.l4.forward(x)
         return x
 
     def parameters(self):
-        return self.l1.parameters() + self.l2.parameters()
+        return self.l1.parameters() + self.l2.parameters() + self.l3.parameters()
 
 def main():
     print("Loading data...")
@@ -55,13 +60,15 @@ def main():
 
     model = HousingModel(input_dim=IN)
 
-    optimizer = pa.Adam(model.parameters(), lr=5e-7)
+    optimizer = pa.Adam(model.parameters(), lr=7.5e-8)
     criterion = pa.MSE()
 
     print("Start training...")
-    epochs = 1000
+    epochs = 2000
 
     start_time = time.time()
+    loss_history = []
+    epoch_history = []
 
     for epoch in range(epochs):
         perm_indices = np.random.permutation(TOTAL_SAMPLES)
@@ -92,6 +99,9 @@ def main():
             epoch_loss += batch_loss
 
         avg_loss = epoch_loss / N_BATCHES
+        loss_history.append(avg_loss)
+        epoch_history.append(epoch)
+        
         if epoch % 25 == 0:
             print(f"Epoch {epoch}/{epochs} | Avg Loss: {avg_loss:.6f}")
 
@@ -107,13 +117,23 @@ def main():
     preds_host = pred_final.to_host()
     targets_host = y_val.flatten()
 
-    print("\nVerification (Validation Data)")
+    print("\nValidation")
     print(f"{'Prediction':<15} | {'Real':<15} | {'Difference':<15}")
     print("-" * 50)
     for k in range(10):
         p = preds_host[k]
         t = targets_host[k]
         print(f"{p:<15.4f} | {t:<15.4f} | {abs(p-t):<15.4f}")
+
+    plt.figure(figsize=(10, 6))
+    plt.plot(epoch_history, loss_history, label='Training Loss')
+    plt.xlabel('Epoch')
+    plt.ylabel('MSE Loss')
+    plt.title('California Housing')
+    plt.legend()
+    plt.grid(True)
+    plt.savefig('loss_plot_housing.pdf')
+    print("\nLoss plot saved to loss_plot_housing.pdf")
 
 if __name__ == "__main__":
     main()
