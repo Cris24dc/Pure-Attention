@@ -175,28 +175,6 @@ namespace core {
             Input->backward(false);
         }
     }
-
-
-    ReshapeFunction::ReshapeFunction(std::shared_ptr<Tensor> in, std::shared_ptr<Tensor> out)
-        : Input(in), Output(out) {
-        original_shape = in->get_shape();
-    }
-
-    void ReshapeFunction::apply_backward() {
-        auto out_ptr = Output.lock();
-        if (!out_ptr) return;
-
-        if (Input->requires_grad()) {
-            uint32_t size = 1;
-            for (auto s : out_ptr->get_shape()) size *= s;
-
-            launch_tensor_add_grad(out_ptr->get_gradient_ptr(), Input->get_gradient_ptr(), size, CudaContext::getStream());
-            
-            cudaStreamSynchronize(CudaContext::getStream());
-
-            Input->backward(false);
-        }
-    }
   
   
     FlashAttentionFunction::FlashAttentionFunction(

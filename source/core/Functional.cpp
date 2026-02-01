@@ -251,30 +251,6 @@ namespace core {
 
     }
 
-    void reshape(const std::shared_ptr<Tensor>& input, const std::vector<uint32_t>& new_shape,
-        std::shared_ptr<Tensor>& output, const cudaStream_t& stream = CudaContext::getStream()) {
-        
-        uint32_t in_elements = 1;
-        for (auto s : input->get_shape()) in_elements *= s;
-        
-        uint32_t out_elements = 1;
-        for (auto s : new_shape) out_elements *= s;
-
-        if (in_elements != out_elements) {
-            throw std::runtime_error("Reshape element count mismatch");
-        }
-
-        bool needs_grad = input->requires_grad();
-        output = std::make_shared<Tensor>(new_shape, needs_grad, false);
-
-        cudaMemcpyAsync(output->get_data_ptr(), input->get_data_ptr(), 
-            in_elements * sizeof(float), cudaMemcpyDeviceToDevice, stream);
-
-        if (needs_grad) {
-            auto node = std::make_shared<ReshapeFunction>(input, output);
-            output->set_grad_fn(node);
-         }
-    }
   
     void flash_attention(const std::shared_ptr<Tensor>& Q, const std::shared_ptr<Tensor>& K,
         const std::shared_ptr<Tensor>& V, std::shared_ptr<Tensor>& O,
