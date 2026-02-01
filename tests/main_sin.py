@@ -56,7 +56,7 @@ class TransformerLayer(pa.Module):
 def main():
     print("--- Input sin(x) --> Output -sin(x) ---")
 
-    BATCH = 128
+    BATCH = 256
     SEQ_LEN = 64
     EMBED = 128
     HEADS = 4

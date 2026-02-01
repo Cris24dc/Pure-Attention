@@ -56,13 +56,13 @@ class TransformerLayer(pa.Module):
 def main():
     print("--- Denoising Task: Clean Signal Recovery ---")
 
-    BATCH = 128
+    BATCH = 256
     SEQ_LEN = 64
     EMBED = 128
     HEADS = 4
     FFN_DIM = 128
     STEPS = 2000
-    LR = 1e-4
+    LR = 5e-5
 
     model = TransformerLayer(EMBED, HEADS, FFN_DIM)
 

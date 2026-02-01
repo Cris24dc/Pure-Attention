@@ -316,10 +316,10 @@ namespace core {
     );
 
     if (output->requires_grad()) {
-        if (gamma->requires_grad()) {
+        if (gamma->requires_grad() && gamma->get_gradient_ptr() != nullptr) {
             cudaMemsetAsync(gamma->get_gradient_ptr(), 0, N * sizeof(float), stream);
         }
-        if (beta->requires_grad()) {
+        if (beta->requires_grad() && beta->get_gradient_ptr() != nullptr) {
             cudaMemsetAsync(beta->get_gradient_ptr(), 0, N * sizeof(float), stream);
         }
         
