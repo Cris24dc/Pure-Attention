@@ -8,12 +8,13 @@ void launch_flash_attention(
     const std::shared_ptr<core::Tensor>& V,
     std::shared_ptr<core::Tensor>& O,
     std::shared_ptr<core::Tensor>& L_cache, // UPDATED: Necesar pentru Backward Pass (Line 2 & 15 din paper)
+    int num_heads,
     cudaStream_t stream
 ) {
     const int N = Q->get_shape()[0];
     const int L = Q->get_shape()[1];
     const int E = Q->get_shape()[2];
-    const int H = 8;
+    const int H = num_heads;
     const int D = E / H;
 
     // N = batch_size
@@ -64,5 +65,8 @@ void launch_flash_attention(
             L_cache->get_data_ptr(),
             N, H, L, scale, stride_batch, stride_head, stride_seq
         );
+    } else {
+        printf("ERROR [FlashAttention Forward]: Unsupported Head Dimension D=%d. Only D=32 and D=64 are supported.\n", D);
+        throw std::runtime_error("FlashAttention: Unsupported Head Dimension");
     }
 }

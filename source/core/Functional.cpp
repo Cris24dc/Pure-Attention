@@ -251,39 +251,16 @@ namespace core {
 
     }
 
-    void reshape(const std::shared_ptr<Tensor>& input, const std::vector<uint32_t>& new_shape,
-        std::shared_ptr<Tensor>& output, const cudaStream_t& stream = CudaContext::getStream()) {
-        
-        uint32_t in_elements = 1;
-        for (auto s : input->get_shape()) in_elements *= s;
-        
-        uint32_t out_elements = 1;
-        for (auto s : new_shape) out_elements *= s;
-
-        if (in_elements != out_elements) {
-            throw std::runtime_error("Reshape element count mismatch");
-        }
-
-        bool needs_grad = input->requires_grad();
-        output = std::make_shared<Tensor>(new_shape, needs_grad, false);
-
-        cudaMemcpyAsync(output->get_data_ptr(), input->get_data_ptr(), 
-            in_elements * sizeof(float), cudaMemcpyDeviceToDevice, stream);
-
-        if (needs_grad) {
-            auto node = std::make_shared<ReshapeFunction>(input, output);
-            output->set_grad_fn(node);
-         }
-    }
   
     void flash_attention(const std::shared_ptr<Tensor>& Q, const std::shared_ptr<Tensor>& K,
         const std::shared_ptr<Tensor>& V, std::shared_ptr<Tensor>& O,
+        int num_heads,
         const cudaStream_t& stream = CudaContext::getStream()) {
         
         const int N = Q->get_shape()[0];
         const int L = Q->get_shape()[1];
         
-        const int H = 8; 
+        const int H = num_heads; 
         const int B_r = 16;
         uint32_t Tr = (L + B_r - 1) / B_r;
 
@@ -296,11 +273,12 @@ namespace core {
         launch_flash_attention(
             Q, K, V, O,
             L_cache,
+            num_heads,
             stream
         );
 
         if (needs_grad) {
-            auto node = std::make_shared<FlashAttentionFunction>(Q, K, V, O, L_cache);
+            auto node = std::make_shared<FlashAttentionFunction>(Q, K, V, O, L_cache, num_heads);
             O->set_grad_fn(node);
         }
     }
@@ -338,10 +316,10 @@ namespace core {
     );
 
     if (output->requires_grad()) {
-        if (gamma->requires_grad()) {
+        if (gamma->requires_grad() && gamma->get_gradient_ptr() != nullptr) {
             cudaMemsetAsync(gamma->get_gradient_ptr(), 0, N * sizeof(float), stream);
         }
-        if (beta->requires_grad()) {
+        if (beta->requires_grad() && beta->get_gradient_ptr() != nullptr) {
             cudaMemsetAsync(beta->get_gradient_ptr(), 0, N * sizeof(float), stream);
         }
         

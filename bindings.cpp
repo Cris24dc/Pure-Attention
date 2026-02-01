@@ -14,8 +14,6 @@
 #include <cmath>
 
 #include <core/Context.h>
-#include <layers/DebugSplit.h>
-#include <layers/DebugReshape.h>
 
 namespace py = pybind11;
 using namespace core;
@@ -114,14 +112,8 @@ PYBIND11_MODULE(PureAttention, m) {
         .def("step", &optim::Adam::step)
         .def("zero_grad", &optim::Adam::zero_grad);
 
-    py::class_<DebugSplit, std::shared_ptr<DebugSplit>>(m, "DebugSplit")
-        .def(py::init<uint32_t, int>())
-        .def("forward", &DebugSplit::forward_impl);
 
-    py::class_<DebugReshape, std::shared_ptr<DebugReshape>>(m, "DebugReshape")
-        .def(py::init<std::vector<uint32_t>>())
-        .def("forward", &DebugReshape::forward);
-        
+
     m.def("fill_normal", [](const std::shared_ptr<Tensor>& t, float std_dev) {
         core::pop_data_normal(t, std_dev, CudaContext::getStream());
     }, "Fill tensor with normal distribution", py::arg("tensor"), py::arg("std_dev")=1.0f);
