@@ -82,29 +82,16 @@ def main():
     steps_history = []
     
     csv_filename = 'denoise_loss.csv'
-    
-    if not os.path.exists(csv_filename):
-        print(f"Warning: {csv_filename} not found. Creating new...")
-        with open(csv_filename, 'w', newline='') as f:
-            writer = csv.DictWriter(f, fieldnames=['step', 'loss_pa', 'loss_to'])
-            writer.writeheader()
-            for i in range(STEPS):
-                writer.writerow({'step': i, 'loss_pa': '', 'loss_to': ''})
+    torch_csv_filename = 'denoise_loss_torch.csv'
 
-    print(f"Reading existing {csv_filename}...")
-    rows = []
-    with open(csv_filename, 'r') as f:
-        reader = csv.DictReader(f)
-        fieldnames = reader.fieldnames
-        rows = list(reader)
-
-    if len(rows) < STEPS:
-        print(f"Warning: CSV has only {len(rows)} rows, but training for {STEPS} steps. Extending CSV memory.")
-        for i in range(len(rows), STEPS):
-            rows.append({'step': i, 'loss_pa': '', 'loss_to': ''})
+    with open(torch_csv_filename, 'w', newline='') as f:
+        writer = csv.DictWriter(f, fieldnames=['step', 'loss_to'])
+        writer.writeheader()
 
     print("Starting Torch Training Loop...")
     
+    buffer = []
+
     for step in range(STEPS):
         optimizer.zero_grad()
         output = model(input_data)
@@ -112,8 +99,13 @@ def main():
         
         loss_val = loss.item()
 
-        if 'loss_to' in rows[step]:
-            rows[step]['loss_to'] = f"{loss_val:.6f}"
+        buffer.append({'step': step, 'loss_to': f"{loss_val:.6f}"})
+
+        if len(buffer) >= 50:
+            with open(torch_csv_filename, 'a', newline='') as f:
+                writer = csv.DictWriter(f, fieldnames=['step', 'loss_to'])
+                writer.writerows(buffer)
+            buffer = []
         
         if not math.isfinite(loss_val) or loss_val > 1e6:
             print(f"!!! Loss explosion at step {step}: {loss_val}")
@@ -127,12 +119,43 @@ def main():
             steps_history.append(step)
             print(f"Step {step:03d} | Torch Loss: {loss_val:.6f}")
 
-    print(f"Updating {csv_filename} with Torch losses...")
+    if buffer:
+        with open(torch_csv_filename, 'a', newline='') as f:
+            writer = csv.DictWriter(f, fieldnames=['step', 'loss_to'])
+            writer.writerows(buffer)
+
+    print(f"Merging {torch_csv_filename} into {csv_filename}...")
+    
+    pa_losses_map = {}
+    if os.path.exists(csv_filename):
+        with open(csv_filename, 'r') as f:
+            reader = csv.DictReader(f)
+            for row in reader:
+                if 'loss_pa' in row and row['loss_pa'].strip():
+                    pa_losses_map[int(row['step'])] = row['loss_pa']
+    
+    to_losses_map = {}
+    with open(torch_csv_filename, 'r') as f:
+        reader = csv.DictReader(f)
+        for row in reader:
+            to_losses_map[int(row['step'])] = row['loss_to']
+
+    all_steps = sorted(set(pa_losses_map.keys()) | set(to_losses_map.keys()))
+    
     with open(csv_filename, 'w', newline='') as f:
         writer = csv.DictWriter(f, fieldnames=['step', 'loss_pa', 'loss_to'])
         writer.writeheader()
+        
+        rows = []
+        for s in all_steps:
+            row = {
+                'step': s,
+                'loss_pa': pa_losses_map.get(s, ''),
+                'loss_to': to_losses_map.get(s, '')
+            }
+            rows.append(row)
         writer.writerows(rows)
-
+    
     end_time = time.time()
     print(f"Finished in {end_time - start_time:.2f}s")
     print(f"Final Loss: {loss_val:.6f}")

@@ -2,7 +2,6 @@ import sys
 import os
 import time
 import math
-import matplotlib.pyplot as plt
 import numpy as np
 import csv
 
@@ -54,8 +53,17 @@ class TransformerLayer(pa.Module):
                 self.ln2.parameters() +
                 self.ln_final.parameters())
 
+def calculate_transformer_flops(batch, seq_len, embed, ffn_dim):
+    term1 = 4 * batch * seq_len * (embed ** 2)
+    term2 = 2 * batch * (seq_len ** 2) * embed
+    term3 = 2 * batch * seq_len * embed * ffn_dim
+    
+    forward_flops = 2 * (term1 + term2 + term3)
+    backward_flops = 2 * forward_flops
+    return forward_flops + backward_flops
+
 def main():
-    print("--- Denoising Task: Clean Signal Recovery (CSV Logging) ---")
+    print("--- PureAttention GFLOPS Benchmark (Block Timing) ---")
     np.random.seed(42)
 
     BATCH = 256
@@ -63,7 +71,7 @@ def main():
     EMBED = 128
     HEADS = 4
     FFN_DIM = 128
-    STEPS = 2000
+    STEPS = 500
     LR = 5e-5
 
     model = TransformerLayer(EMBED, HEADS, FFN_DIM)
@@ -90,65 +98,51 @@ def main():
     optim = pa.Adam(model.parameters(), lr=LR)
     criterion = pa.MSE()
 
-    start_time = time.time()
-    loss_history = []
-    steps_history = []
+    flops_per_step = calculate_transformer_flops(BATCH, SEQ_LEN, EMBED, FFN_DIM)
+    print(f"Theoretical GFLOPS per step target: {flops_per_step / 1e9:.4f}")
 
-    csv_filename = 'denoise_loss.csv'
-    print(f"Logging loss to {csv_filename}...")
+    csv_filename = 'gflops_pa.csv'
+    print(f"Logging GFLOPS to {csv_filename}...")
     
-    fieldnames = ['step', 'loss_pa', 'loss_to']
     with open(csv_filename, 'w', newline='') as csvfile:
+        fieldnames = ['step', 'gflops']
         writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
         writer.writeheader()
+        
+        buffer = []
+        
+        block_start_time = time.time()
+        
+        for step in range(STEPS):
+            optim.zero_grad()
+            output = model.forward(input_data)
+            loss = criterion.forward(output, target_data)
 
-    buffer = []
+            loss_val = loss.to_host()[0]
 
-    for step in range(STEPS):
-        optim.zero_grad()
-        output = model.forward(input_data)
-        loss = criterion.forward(output, target_data)
+            if not math.isfinite(loss_val) or loss_val > 1e6:
+                print(f"!!! Loss explosion at step {step}: {loss_val}")
+                break
 
-        loss_val = loss.to_host()[0]
+            loss.backward()
+            optim.step()
 
-        buffer.append({'step': step, 'loss_pa': loss_val, 'loss_to': ''})
+            if (step + 1) % 50 == 0:
+                block_end_time = time.time()
+                block_duration = block_end_time - block_start_time
+                
+                avg_throughput = (50 * flops_per_step) / block_duration / 1e9
+                
+                print(f"Step {step:03d} | Loss: {loss_val:.6f} | GFLOPS: {avg_throughput:.2f}")
+                
+                buffer.append({'step': step, 'gflops': f"{avg_throughput:.4f}"})
+                
+                block_start_time = time.time()
 
-        if len(buffer) >= 50:
-            with open(csv_filename, 'a', newline='') as csvfile:
-                writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
-                writer.writerows(buffer)
-            buffer = []
-
-        if not math.isfinite(loss_val) or loss_val > 1e6:
-            print(f"!!! Loss explosion at step {step}: {loss_val}")
-            break
-
-        loss.backward()
-        optim.step()
-
-        if step % 50 == 0:
-            loss_history.append(loss_val)
-            steps_history.append(step)
-            print(f"Step {step:03d} | Loss: {loss_val:.6f}")
-
-    if buffer:
-        with open(csv_filename, 'a', newline='') as csvfile:
-            writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
+        if buffer:
             writer.writerows(buffer)
 
-    end_time = time.time()
-    print(f"Finished in {end_time - start_time:.2f}s")
-    print(f"Final Loss: {loss_val:.6f}")
-
-    plt.figure(figsize=(10, 6))
-    plt.plot(steps_history, loss_history, label='Denoising Loss')
-    plt.xlabel('Step')
-    plt.ylabel('MSE Loss')
-    plt.title('Denoising Task Training')
-    plt.legend()
-    plt.grid(True)
-    plt.savefig('loss_plot_denoise_csv.pdf')
-    print("Plot saved to loss_plot_denoise_csv.pdf")
+    print("Finished.")
 
 if __name__ == "__main__":
     main()
